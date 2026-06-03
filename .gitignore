@@ -1,4 +1,32 @@
+# Python
 .venv/
+venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment files with secrets
 .env
+.env.*
+!.env.example
+!.env.*.example
+!*.env.example
+
+# Node / frontend
+node_modules/
+dist/
+dist-ssr/
+
+# Logs
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

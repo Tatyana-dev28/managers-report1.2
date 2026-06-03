@@ -6,6 +6,7 @@ from decimal import Decimal
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -80,6 +81,7 @@ class User(TimestampMixin, Base):
     bitrix_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     first_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    role: Mapped[str] = mapped_column(String(32), default="manager", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -119,6 +121,8 @@ class ManagerSubmission(Base):
     )
 
     __table_args__ = (
+        CheckConstraint("period_end > period_start", name="ck_manager_submissions_period_order"),
+        CheckConstraint("slot IN ('morning', 'afternoon', 'evening')", name="ck_manager_submissions_slot"),
         Index("ix_manager_submissions_report", "portal_id", "user_id", "period_start", "period_end"),
         Index("ix_manager_submissions_date_slot", "portal_id", "report_date", "slot"),
     )
@@ -139,6 +143,7 @@ class ManagerSubmissionValue(Base):
     submission: Mapped["ManagerSubmission"] = relationship(back_populates="values")
 
     __table_args__ = (
+        CheckConstraint("value >= 0", name="ck_manager_submission_values_non_negative"),
         UniqueConstraint("submission_id", "metric_code", name="uq_manager_submission_metric"),
         Index("ix_manager_submission_values_metric", "metric_code"),
     )
@@ -163,6 +168,7 @@ class SystemMetricSnapshot(Base):
     )
 
     __table_args__ = (
+        CheckConstraint("period_end > period_start", name="ck_system_snapshots_period_order"),
         UniqueConstraint(
             "portal_id",
             "user_id",
@@ -190,6 +196,7 @@ class SystemMetricValue(Base):
     snapshot: Mapped["SystemMetricSnapshot"] = relationship(back_populates="values")
 
     __table_args__ = (
+        CheckConstraint("value >= 0", name="ck_system_metric_values_non_negative"),
         UniqueConstraint("snapshot_id", "metric_code", name="uq_system_snapshot_metric"),
         Index("ix_system_metric_values_metric", "metric_code"),
     )
@@ -211,6 +218,8 @@ class ReminderLog(Base):
     user: Mapped["User"] = relationship(back_populates="reminder_logs")
 
     __table_args__ = (
+        CheckConstraint("slot IN ('morning', 'afternoon', 'evening')", name="ck_reminder_logs_slot"),
+        CheckConstraint("status IN ('sent', 'failed')", name="ck_reminder_logs_status"),
         Index("ix_reminder_logs_report", "portal_id", "user_id", "report_date", "slot"),
         Index("ix_reminder_logs_status", "portal_id", "status"),
     )
@@ -270,6 +279,10 @@ class MetricPlan(TimestampMixin, Base):
     created_by_user: Mapped["User | None"] = relationship(foreign_keys=[created_by_user_id])
 
     __table_args__ = (
+        CheckConstraint("plan_year >= 2000", name="ck_metric_plans_year"),
+        CheckConstraint("plan_month BETWEEN 1 AND 12", name="ck_metric_plans_month"),
+        CheckConstraint("daily_value >= 0", name="ck_metric_plans_daily_non_negative"),
+        CheckConstraint("monthly_value >= 0", name="ck_metric_plans_monthly_non_negative"),
         UniqueConstraint(
             "portal_id",
             "user_id",

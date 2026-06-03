@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.db.models import (
     ManagerSubmission,
     ManagerSubmissionValue,
@@ -22,6 +24,7 @@ from app.db.models import (
 from app.db.session import SessionLocal
 from app.domain.metrics import METRIC_CODES
 from app.domain.reminder_statuses import SENT
+from app.domain.roles import LEADER, MANAGER
 from app.domain.submission_slots import AFTERNOON, EVENING, MORNING
 
 
@@ -39,11 +42,12 @@ MANAGER_BITRIX_IDS = (101, 102, 103)
 LEADER_BITRIX_ID = 1
 
 BASE_DAILY_PLANS = {
+    "meetings_held": Decimal("2"),
+    "meetings_created": Decimal("2"),
     "calls_total": Decimal("35"),
     "outgoing_calls": Decimal("25"),
     "successful_outgoing_calls": Decimal("15"),
     "incoming_calls": Decimal("10"),
-    "meetings_created": Decimal("2"),
     "commercial_offers_sent": Decimal("3"),
     "contracts_sent": Decimal("2"),
     "contracts_signed": Decimal("1"),
@@ -56,11 +60,12 @@ BASE_DAILY_PLANS = {
 
 SYSTEM_VALUES_BY_MANAGER = {
     101: {
+        "meetings_held": Decimal("2"),
+        "meetings_created": Decimal("3"),
         "calls_total": Decimal("42"),
         "outgoing_calls": Decimal("30"),
         "successful_outgoing_calls": Decimal("18"),
         "incoming_calls": Decimal("12"),
-        "meetings_created": Decimal("3"),
         "commercial_offers_sent": Decimal("4"),
         "contracts_sent": Decimal("2"),
         "contracts_signed": Decimal("1"),
@@ -71,11 +76,12 @@ SYSTEM_VALUES_BY_MANAGER = {
         "paid_invoice_sum": Decimal("95000"),
     },
     102: {
+        "meetings_held": Decimal("1"),
+        "meetings_created": Decimal("1"),
         "calls_total": Decimal("29"),
         "outgoing_calls": Decimal("21"),
         "successful_outgoing_calls": Decimal("12"),
         "incoming_calls": Decimal("8"),
-        "meetings_created": Decimal("1"),
         "commercial_offers_sent": Decimal("2"),
         "contracts_sent": Decimal("1"),
         "contracts_signed": Decimal("0"),
@@ -86,11 +92,12 @@ SYSTEM_VALUES_BY_MANAGER = {
         "paid_invoice_sum": Decimal("42000"),
     },
     103: {
+        "meetings_held": Decimal("2"),
+        "meetings_created": Decimal("2"),
         "calls_total": Decimal("36"),
         "outgoing_calls": Decimal("24"),
         "successful_outgoing_calls": Decimal("14"),
         "incoming_calls": Decimal("12"),
-        "meetings_created": Decimal("2"),
         "commercial_offers_sent": Decimal("3"),
         "contracts_sent": Decimal("2"),
         "contracts_signed": Decimal("1"),
@@ -105,11 +112,12 @@ SYSTEM_VALUES_BY_MANAGER = {
 MANAGER_SUBMISSIONS = {
     101: {
         MORNING: {
+            "meetings_held": Decimal("1"),
+            "meetings_created": Decimal("1"),
             "calls_total": Decimal("15"),
             "outgoing_calls": Decimal("11"),
             "successful_outgoing_calls": Decimal("7"),
             "incoming_calls": Decimal("4"),
-            "meetings_created": Decimal("1"),
             "commercial_offers_sent": Decimal("1"),
             "contracts_sent": Decimal("1"),
             "contracts_signed": Decimal("0"),
@@ -120,11 +128,12 @@ MANAGER_SUBMISSIONS = {
             "paid_invoice_sum": Decimal("0"),
         },
         AFTERNOON: {
+            "meetings_held": Decimal("1"),
+            "meetings_created": Decimal("1"),
             "calls_total": Decimal("18"),
             "outgoing_calls": Decimal("13"),
             "successful_outgoing_calls": Decimal("8"),
             "incoming_calls": Decimal("5"),
-            "meetings_created": Decimal("1"),
             "commercial_offers_sent": Decimal("2"),
             "contracts_sent": Decimal("1"),
             "contracts_signed": Decimal("1"),
@@ -137,11 +146,12 @@ MANAGER_SUBMISSIONS = {
     },
     102: {
         MORNING: {
+            "meetings_held": Decimal("0"),
+            "meetings_created": Decimal("0"),
             "calls_total": Decimal("10"),
             "outgoing_calls": Decimal("8"),
             "successful_outgoing_calls": Decimal("4"),
             "incoming_calls": Decimal("2"),
-            "meetings_created": Decimal("0"),
             "commercial_offers_sent": Decimal("1"),
             "contracts_sent": Decimal("0"),
             "contracts_signed": Decimal("0"),
@@ -174,8 +184,8 @@ def upsert_portal_auth(db: Session, portal: Portal) -> None:
     if auth is None:
         auth = PortalAuth(
             portal_id=portal.id,
-            access_token_encrypted="demo-access-token",
-            refresh_token_encrypted="demo-refresh-token",
+            access_token_encrypted="demo-only-access-token-placeholder",
+            refresh_token_encrypted="demo-only-refresh-token-placeholder",
             expires_at=datetime.now(timezone.utc) + timedelta(days=30),
             scope="demo",
         )
@@ -203,6 +213,7 @@ def get_or_create_users(db: Session, portal: Portal) -> dict[int, User]:
 
         user.first_name = demo_user["first_name"]
         user.last_name = demo_user["last_name"]
+        user.role = LEADER if user.bitrix_user_id == LEADER_BITRIX_ID else MANAGER
         user.is_active = True
         users[user.bitrix_user_id] = user
 
@@ -386,8 +397,9 @@ def add_activity_logs(
     portal: Portal,
     users: dict[int, User],
     report_date: date,
+    app_timezone: ZoneInfo,
 ) -> None:
-    opened_at = datetime.combine(report_date, time(hour=9, minute=20), tzinfo=timezone.utc)
+    opened_at = datetime.combine(report_date, time(hour=9, minute=20), tzinfo=app_timezone)
     for bitrix_user_id in (101, 102):
         user = users[bitrix_user_id]
         existing = db.scalar(
@@ -413,6 +425,7 @@ def upsert_reminder_logs(
     portal: Portal,
     users: dict[int, User],
     report_date: date,
+    app_timezone: ZoneInfo,
 ) -> None:
     slot_times = {
         MORNING: time(hour=9),
@@ -422,7 +435,7 @@ def upsert_reminder_logs(
     for bitrix_user_id in MANAGER_BITRIX_IDS:
         user = users[bitrix_user_id]
         for slot, slot_time in slot_times.items():
-            sent_at = datetime.combine(report_date, slot_time, tzinfo=timezone.utc)
+            sent_at = datetime.combine(report_date, slot_time, tzinfo=app_timezone)
             reminder = db.scalar(
                 select(ReminderLog).where(
                     ReminderLog.portal_id == portal.id,
@@ -449,8 +462,10 @@ def upsert_reminder_logs(
 
 
 def seed_demo() -> None:
-    report_date = date.today() - timedelta(days=1)
-    period_start = datetime.combine(report_date, time.min, tzinfo=timezone.utc)
+    settings = get_settings()
+    app_timezone = ZoneInfo(settings.timezone)
+    report_date = datetime.now(app_timezone).date() - timedelta(days=1)
+    period_start = datetime.combine(report_date, time.min, tzinfo=app_timezone)
     period_end = period_start + timedelta(days=1)
 
     with SessionLocal() as db:
@@ -484,8 +499,8 @@ def seed_demo() -> None:
                     values=values,
                 )
 
-        add_activity_logs(db, portal, users, report_date)
-        upsert_reminder_logs(db, portal, users, report_date)
+        add_activity_logs(db, portal, users, report_date, app_timezone)
+        upsert_reminder_logs(db, portal, users, report_date, app_timezone)
         db.commit()
 
     print(f"Demo data seeded for {report_date.isoformat()}.")
