@@ -64,10 +64,8 @@ button {
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  min-height: 74px;
-  padding: 14px 22px;
+  min-height: 82px;
+  padding: 14px 34px;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
@@ -75,7 +73,8 @@ button {
 .brand {
   display: flex;
   align-items: center;
-  min-width: 150px;
+  gap: 10px;
+  min-width: 0;
 }
 
 .brand-logo {
@@ -86,42 +85,17 @@ button {
   object-fit: contain;
 }
 
-.page-title {
-  padding: 10px 22px;
-  border-bottom: 1px solid var(--line);
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-}
-
-.page-title h1 {
+.brand h1 {
   margin: 0;
-  color: #37393e;
-  font-size: 20px;
+  color: #1f2329;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: 0;
 }
 
-.page-title p,
 .section-heading p {
   margin: 5px 0 0;
   color: var(--muted);
-  font-size: 14px;
-}
-
-.current-user {
-  display: grid;
-  gap: 2px;
-  min-width: 220px;
-  text-align: right;
-}
-
-.current-user span,
-.current-user small {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.current-user strong {
-  color: var(--text);
   font-size: 14px;
 }
 
@@ -487,20 +461,20 @@ table {
 }
 
 .indicator-col {
-  width: auto;
+  width: 34%;
 }
 
 .report-number-col {
-  width: 92px;
+  width: 12%;
 }
 
 .report-status-col {
-  width: 104px;
+  width: 18%;
 }
 
 th,
 td {
-  padding: 5px 12px;
+  padding: 5px 10px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: middle;
@@ -514,6 +488,10 @@ th {
   color: #272a2f;
   background: linear-gradient(180deg, #ffffff 0%, #f5f7fa 100%);
   font-weight: 650;
+}
+
+.report-layout th {
+  font-size: 13px;
 }
 
 tr:last-child td {
@@ -531,7 +509,6 @@ tbody tr:nth-child(even) td {
 
 .report-layout th:first-child,
 .report-layout td:first-child {
-  min-width: 360px;
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -544,7 +521,7 @@ tbody tr:nth-child(even) td {
 
 .report-layout th:nth-child(6),
 .report-layout td:nth-child(6) {
-  text-align: right;
+  text-align: center;
 }
 
 .input-col {
@@ -641,7 +618,6 @@ tbody tr:nth-child(even) td {
 .employee-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   width: 100%;
   gap: 8px;
   min-height: 34px;
@@ -664,14 +640,6 @@ tbody tr:nth-child(even) td {
   font-weight: 650;
 }
 
-.badges {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: end;
-}
-
-.badge,
 .plan-status {
   display: inline-flex;
   justify-content: center;
@@ -685,18 +653,12 @@ tbody tr:nth-child(even) td {
 }
 
 .plan-status {
-  width: 88px;
+  width: 104px;
 }
 
-.badge.ok,
 .plan-status.over_completed {
   color: var(--ok);
   background: var(--ok-bg);
-}
-
-.badge.muted {
-  color: var(--muted);
-  background: #eef1f4;
 }
 
 .plan-status.no_plan {
@@ -916,33 +878,27 @@ tbody tr:nth-child(even) td {
   }
 
   .topbar {
-    flex-direction: column;
-    align-items: stretch;
-    padding: 14px;
+    min-height: 68px;
+    padding: 12px 14px;
+  }
+
+  .brand {
+    gap: 14px;
   }
 
   .brand-logo {
-    width: 128px;
+    width: 112px;
   }
 
-  .page-title {
-    padding: 18px 14px;
+  .brand h1 {
+    font-size: 18px;
   }
 
-  .page-title h1 {
-    font-size: 22px;
-  }
-
-  .current-user,
   input,
   select,
   .slot-field {
     width: 100%;
     min-width: 0;
-  }
-
-  .current-user {
-    text-align: left;
   }
 
   .layout {
@@ -967,10 +923,6 @@ tbody tr:nth-child(even) td {
 
   .employee-header {
     flex-direction: column;
-  }
-
-  .badges {
-    justify-content: start;
   }
 
   .alert,

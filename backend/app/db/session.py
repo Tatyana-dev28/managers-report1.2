@@ -8,7 +8,11 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+engine_options = {"pool_pre_ping": True}
+if settings.database_url.startswith("mysql"):
+    engine_options["pool_recycle"] = 280
+
+engine = create_engine(settings.database_url, **engine_options)
 
 SessionLocal = sessionmaker(
     autocommit=False,

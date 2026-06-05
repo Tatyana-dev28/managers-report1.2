@@ -1,6 +1,17 @@
 # Деплой на Timeweb Cloud
 
-## 1. Backend
+## 1. База данных
+
+Создать MySQL-базу данных и собрать строку подключения:
+
+```env
+DATABASE_URL=mysql+pymysql://USER:PASSWORD@HOST:3306/DB_NAME?charset=utf8mb4
+```
+
+PostgreSQL для локальной разработки тоже поддерживается, но для production по
+новому требованию используем MySQL.
+
+## 2. Backend
 
 Создать приложение из репозитория и выбрать:
 
@@ -25,7 +36,7 @@
 - `https://backend-domain/health`
 - `https://backend-domain/bitrix-settings/check`
 
-## 2. Frontend
+## 3. Frontend
 
 Создать отдельное приложение из того же репозитория и выбрать:
 
@@ -48,7 +59,7 @@ CORS_ORIGINS=["https://frontend-domain"]
 
 После изменения переменных backend нужно перезапустить.
 
-## 3. Битрикс24
+## 4. Битрикс24
 
 В тестовом приложении Битрикс24 указать URL frontend:
 

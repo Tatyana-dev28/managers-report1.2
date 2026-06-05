@@ -23,7 +23,13 @@ def upgrade() -> None:
         sa.Column("role", sa.String(length=32), nullable=False, server_default="manager"),
     )
     op.execute("UPDATE users SET role = 'leader' WHERE bitrix_user_id = 1")
-    op.alter_column("users", "role", server_default=None)
+    op.alter_column(
+        "users",
+        "role",
+        existing_type=sa.String(length=32),
+        existing_nullable=False,
+        server_default=None,
+    )
 
 
 def downgrade() -> None:

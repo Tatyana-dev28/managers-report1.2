@@ -1,4 +1,5 @@
 from typing import Any
+from time import sleep
 
 import httpx
 from fastapi import HTTPException
@@ -18,8 +19,7 @@ class BitrixRestClient:
 
     def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         url = f"{self.webhook_url}/{method}.json"
-        response = httpx.post(url, json=params or {}, timeout=30)
-        response.raise_for_status()
+        response = self.post_with_retry(url, params or {})
         payload = response.json()
 
         if "error" in payload:
@@ -29,6 +29,30 @@ class BitrixRestClient:
             )
 
         return payload
+
+    def post_with_retry(self, url: str, params: dict[str, Any]) -> httpx.Response:
+        last_error: Exception | None = None
+
+        for attempt in range(3):
+            try:
+                response = httpx.post(url, json=params, timeout=30)
+                response.raise_for_status()
+                return response
+            except httpx.HTTPStatusError as error:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Bitrix HTTP error {error.response.status_code}: {error.response.text}",
+                ) from error
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as error:
+                last_error = error
+                if attempt < 2:
+                    sleep(0.5 * (attempt + 1))
+                    continue
+
+        raise HTTPException(
+            status_code=502,
+            detail=f"Cannot connect to Bitrix24 REST API: {last_error}",
+        )
 
     def list_all(self, method: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []

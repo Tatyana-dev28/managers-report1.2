@@ -136,17 +136,9 @@ function render() {
       <header class="topbar">
         <div class="brand">
           <img src="${logoUrl}" alt="САПП" class="brand-logo">
-        </div>
-        <div class="current-user">
-          <span>Пользователь</span>
-          <strong>${state.selectedUser ? getUserName(state.selectedUser) : '...'}</strong>
-          <small>${state.selectedUser?.role === 'leader' ? 'руководитель' : 'менеджер'}</small>
+          <h1>Ежедневный отчет менеджера</h1>
         </div>
       </header>
-
-      <section class="page-title">
-        <h1>Ежедневный отчет менеджера</h1>
-      </section>
 
       ${state.error ? `<div class="alert error">${escapeHtml(state.error)}</div>` : ''}
       ${state.notice ? `<div class="alert success">${escapeHtml(state.notice)}</div>` : ''}
@@ -354,14 +346,6 @@ function renderEmployeeReport(employee: EmployeeReport) {
     <section class="employee-report">
       <button class="employee-header ${isOpen ? 'active' : ''}" type="button" data-user="${employee.bitrix_user_id}">
         <span class="employee-name">${employee.full_name}</span>
-        <span class="badges">
-          <span class="badge ${employee.opened_app ? 'ok' : 'muted'}">
-            ${employee.opened_app ? 'Заходил' : 'Не заходил'}
-          </span>
-          <span class="badge ${employee.submitted_data ? 'ok' : 'muted'}">
-            ${employee.submitted_data ? 'Отправлял' : 'Не отправлял'}
-          </span>
-        </span>
       </button>
       ${isOpen ? `<div class="table-wrap report-details">
         <table>
@@ -853,20 +837,20 @@ function getReportPlanLabels() {
   if (state.dateFrom === state.dateTo) {
     return {
       plan: 'План дня',
-      status: 'Выполнение дня',
+      status: 'Выполнение',
     };
   }
 
   if (isFullMonthRange(state.dateFrom, state.dateTo)) {
     return {
       plan: 'План месяца',
-      status: 'Выполнение месяца',
+      status: 'Выполнение',
     };
   }
 
   return {
     plan: 'План периода',
-    status: 'Выполнение периода',
+    status: 'Выполнение',
   };
 }
 

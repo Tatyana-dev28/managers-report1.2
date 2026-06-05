@@ -26,7 +26,19 @@ def get_active_portal_or_404(db: Session) -> Portal:
 
 def get_report_assignees(db: Session) -> ReportAssigneesRead:
     portal = get_active_portal_or_404(db)
-    users = sync_active_bitrix_users(db, portal)
+    try:
+        users = sync_active_bitrix_users(db, portal)
+    except HTTPException:
+        users = list(
+            db.scalars(
+                select(User)
+                .where(User.portal_id == portal.id, User.is_active.is_(True))
+                .order_by(User.role.desc(), User.last_name, User.first_name, User.bitrix_user_id)
+            )
+        )
+        if not users:
+            raise
+
     selected_ids = get_selected_assignee_bitrix_user_ids(db, portal.id)
 
     return ReportAssigneesRead(
