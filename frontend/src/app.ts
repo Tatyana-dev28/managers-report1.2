@@ -1,71 +1,67 @@
 import {
-  authMe,
-  createSubmission,
+  getBitrixUsers,
+  getCategories,
+  getCrmTypes,
   getMetrics,
-  getMySubmissions,
-  getPlans,
-  getReportAssignees,
-  getReport,
-  getUsers,
-  saveReportAssignees,
-  savePlans,
+  getSavedMetricSettings,
+  getStages,
+  getSystemReport,
+  saveMetricSettings,
 } from './api';
-import { getBitrixAuthUser } from './bitrix';
-import type { EmployeeReport, Metric, Plan, Report, ReportAssignees, Submission, User } from './types';
+import { getBitrixAuth } from './bitrix';
+import type {
+  BitrixAuthPayload,
+  BitrixUser,
+  Category,
+  CrmType,
+  EmployeeSystemReport,
+  Metric,
+  MetricSettings,
+  Stage,
+  SystemReport,
+} from './types';
 import logoUrl from './assets/sapp-logo.svg';
 
+type DateFilterValue =
+  | 'today'
+  | 'yesterday'
+  | 'this_week'
+  | 'last_week'
+  | 'this_month'
+  | 'last_month'
+  | 'exact'
+  | 'range';
+
 type AppState = {
+  auth: BitrixAuthPayload | null;
   metrics: Metric[];
-  users: User[];
-  selectedUser: User | null;
+  users: BitrixUser[];
+  crmTypes: CrmType[];
+  dealCategories: Category[];
+  meetingStages: Stage[];
+  contractStages: Stage[];
+  invoiceStages: Stage[];
+  saleStages: Stage[];
+  settings: MetricSettings;
+  settingsOpen: boolean;
+  selectedUserIds: number[];
+  openedUserIds: number[];
+  dateFilter: DateFilterValue;
+  exactDate: string;
+  rangeFrom: string;
+  rangeTo: string;
   dateFrom: string;
   dateTo: string;
-  leaderDateFilter: string;
-  leaderExactDate: string;
-  leaderRangeFrom: string;
-  leaderRangeTo: string;
-  report: Report | null;
-  reportAssignees: ReportAssignees | null;
-  submissions: Submission[];
-  plans: Plan[];
-  planYear: number;
-  planMonth: number;
-  openedPlanBitrixUserIds: number[];
-  openedReportBitrixUserIds: number[];
-  view: 'main' | 'plans';
+  report: SystemReport | null;
   loading: boolean;
+  reportLoading: boolean;
   error: string | null;
-  notice: string | null;
-};
-
-const state: AppState = {
-  metrics: [],
-  users: [],
-  selectedUser: null,
-  dateFrom: getYesterday(),
-  dateTo: getYesterday(),
-  leaderDateFilter: 'yesterday',
-  leaderExactDate: getYesterday(),
-  leaderRangeFrom: getYesterday(),
-  leaderRangeTo: getYesterday(),
-  report: null,
-  reportAssignees: null,
-  submissions: [],
-  plans: [],
-  planYear: new Date().getFullYear(),
-  planMonth: new Date().getMonth() + 1,
-  openedPlanBitrixUserIds: [],
-  openedReportBitrixUserIds: [],
-  view: 'main',
-  loading: false,
-  error: null,
-  notice: null,
+  statusMessage: string;
 };
 
 const app = document.querySelector<HTMLDivElement>('#app');
 
-const DATE_FILTER_OPTIONS = [
-  { value: 'any', label: 'Любая дата' },
+const DATE_FILTER_OPTIONS: { value: DateFilterValue; label: string }[] = [
   { value: 'today', label: 'Сегодня' },
   { value: 'yesterday', label: 'Вчера' },
   { value: 'this_week', label: 'Текущая неделя' },
@@ -74,20 +70,68 @@ const DATE_FILTER_OPTIONS = [
   { value: 'last_month', label: 'Прошлый месяц' },
   { value: 'exact', label: 'Точная дата' },
   { value: 'range', label: 'Диапазон' },
-] as const;
+];
+
+const initialRange = getPresetDateRange('yesterday');
+
+const state: AppState = {
+  auth: null,
+  metrics: [],
+  users: [],
+  crmTypes: [],
+  dealCategories: [],
+  meetingStages: [],
+  contractStages: [],
+  invoiceStages: [],
+  saleStages: [],
+  settings: createEmptySettings(),
+  settingsOpen: true,
+  selectedUserIds: [],
+  openedUserIds: [],
+  dateFilter: 'yesterday',
+  exactDate: getToday(),
+  rangeFrom: initialRange.from,
+  rangeTo: initialRange.to,
+  dateFrom: initialRange.from,
+  dateTo: initialRange.to,
+  report: null,
+  loading: false,
+  reportLoading: false,
+  error: null,
+  statusMessage: 'Инициализация приложения...',
+};
 
 export async function startApp() {
   if (!app) return;
+
+  render();
   await runWithState(async () => {
-    const [metrics, authPayload] = await Promise.all([getMetrics(), getBitrixAuthUser()]);
-    const currentUser = await authMe(authPayload);
-    const users = currentUser.role === 'leader' ? await getUsers() : [currentUser];
-    const reportAssignees = currentUser.role === 'leader' ? await getReportAssignees() : null;
+    const [auth, metrics] = await Promise.all([
+      getBitrixAuth(),
+      getMetrics(),
+    ]);
+
+    state.auth = auth;
     state.metrics = metrics;
+    state.statusMessage = 'Получаем сотрудников и настройки источников из Битрикс24...';
+    render();
+
+    const [users, savedSettings, crmTypes, dealCategories] = await Promise.all([
+      getBitrixUsers(auth),
+      getSavedMetricSettings(auth),
+      getCrmTypes(auth),
+      getCategories(auth, 2),
+    ]);
+
     state.users = users;
-    state.reportAssignees = reportAssignees;
-    state.selectedUser = currentUser;
-    await loadCurrentViewData();
+    state.crmTypes = crmTypes;
+    state.dealCategories = dealCategories;
+    state.settings = savedSettings ?? createEmptySettings();
+    state.settingsOpen = !isSettingsComplete(state.settings);
+    await reloadStageLists();
+    state.statusMessage = state.settingsOpen
+      ? 'Заполните настройки источников показателей перед формированием отчета.'
+      : 'Выберите фильтры и сотрудников для формирования отчета.';
   });
 }
 
@@ -100,32 +144,11 @@ async function runWithState(action: () => Promise<void>) {
     await action();
   } catch (error) {
     state.error = error instanceof Error ? error.message : 'Неизвестная ошибка';
+    state.statusMessage = state.error;
   } finally {
     state.loading = false;
     render();
   }
-}
-
-async function loadCurrentViewData() {
-  if (!state.selectedUser) return;
-
-  if (state.selectedUser.role === 'leader') {
-    if (state.view === 'plans') {
-      state.plans = await getPlans(state.planYear, state.planMonth);
-    } else {
-      state.report = await getReport(state.dateFrom, state.dateTo);
-    }
-    return;
-  }
-
-  const today = getToday();
-  state.dateFrom = today;
-  state.dateTo = today;
-  state.submissions = await getMySubmissions(
-    state.selectedUser.bitrix_user_id,
-    state.dateFrom,
-    state.dateTo,
-  );
 }
 
 function render() {
@@ -135,200 +158,249 @@ function render() {
     <div class="app-frame">
       <header class="topbar">
         <div class="brand">
-          <img src="${logoUrl}" alt="САПП" class="brand-logo">
+          <a class="brand-link" href="https://sapp24.com/?utm_source=app-b24" target="_blank" rel="noopener noreferrer" aria-label="САПП">
+            <img src="${logoUrl}" alt="САПП" class="brand-logo">
+          </a>
           <h1>Ежедневный отчет менеджера</h1>
         </div>
+        <a class="help-button" href="https://sapp24.com/apps/help/" target="_blank" rel="noopener noreferrer">Помощь</a>
       </header>
 
-      ${state.error ? `<div class="alert error">${escapeHtml(state.error)}</div>` : ''}
-      ${state.notice ? `<div class="alert success">${escapeHtml(state.notice)}</div>` : ''}
-      ${state.loading ? '<div class="loader">Загрузка данных...</div>' : ''}
+      ${renderStatusBar()}
 
-      ${renderContent()}
+      <main class="layout">
+        ${renderToolbar()}
+        ${renderSettingsPanel()}
+        ${renderReportPanel()}
+      </main>
     </div>
   `;
 
-  bindCommonEvents();
+  bindEvents();
 }
 
-function renderContent() {
-  if (!state.selectedUser) {
-    return '<main class="empty">Пользователь не определен. Открой приложение внутри Битрикс24 или укажи bitrix_user_id для локальной проверки.</main>';
-  }
-
-  if (state.selectedUser.role === 'leader') {
-    return state.view === 'plans' ? renderPlansPage() : renderLeaderPage();
-  }
-
-  return renderManagerPage();
+function renderStatusBar() {
+  return `
+    <div class="status-strip ${state.loading || state.reportLoading ? 'active' : ''}">
+      ${escapeHtml(state.statusMessage)}
+    </div>
+  `;
 }
 
-function renderLeaderDateFilter() {
-  const selectedLabel = getDateFilterLabel(state.leaderDateFilter);
-
+function renderToolbar() {
   return `
     <section class="toolbar">
-      <div class="filter-group date-filter" data-selected-value="${state.leaderDateFilter}">
-        <label class="title-filters">Выберите дату</label>
-        <div class="dropdown">
-          <button type="button" id="leader-date-dropdown-btn" class="dropdown-btn date-dropdown-btn">
-            ${selectedLabel}
-          </button>
-          <div id="leader-date-dropdown-content" class="dropdown-content">
-            ${DATE_FILTER_OPTIONS.map(
-              (option) => `
-                <button type="button" class="date-option ${state.leaderDateFilter === option.value ? 'selected' : ''}" data-value="${option.value}">
-                  ${option.label}
-                </button>
-              `,
-            ).join('')}
-            <div class="exact-date-field ${state.leaderDateFilter === 'exact' ? 'visible' : ''}">
-              ${renderDatePickerField('leader-exact-date', state.leaderExactDate, 'exact-date')}
-            </div>
-            <div class="date-range-fields ${state.leaderDateFilter === 'range' ? 'visible' : ''}">
-              ${renderDatePickerField('leader-range-from', state.leaderRangeFrom, 'date-from')}
-              ${renderDatePickerField('leader-range-to', state.leaderRangeTo, 'date-to')}
-            </div>
-          </div>
-        </div>
-      </div>
-      <button id="reload-data" class="button primary" type="button">Обновить</button>
+      ${renderDateFilter()}
+      ${renderEmployeeFilter()}
+      <button id="load-report" class="button primary" type="button">Показать отчет</button>
     </section>
   `;
 }
 
-function renderDatePickerField(id: string, isoValue: string, className: string) {
+function renderDateFilter() {
   return `
-    <div class="date-picker-field">
-      <input id="${id}" class="${className} date-input" type="text" inputmode="numeric" placeholder="дд.мм.гггг" value="${isoToDisplayDate(isoValue)}">
-      <input id="${id}-native" class="native-date-input" type="date" value="${isoValue}" tabindex="-1" aria-hidden="true">
-      <button type="button" class="calendar-button" data-target="${id}" aria-label="Открыть календарь">
-        <span aria-hidden="true">▦</span>
-      </button>
+    <div class="filter-group date-filter">
+      <label class="field-title">Выберите дату</label>
+      <div class="dropdown">
+        <button type="button" id="date-dropdown-btn" class="dropdown-btn">
+          ${getDateFilterLabel(state.dateFilter)}
+        </button>
+        <div id="date-dropdown-content" class="dropdown-content">
+          ${DATE_FILTER_OPTIONS.map(
+            (option) => `
+              <button
+                type="button"
+                class="dropdown-option date-option ${state.dateFilter === option.value ? 'selected' : ''}"
+                data-value="${option.value}"
+              >
+                ${option.label}
+              </button>
+            `,
+          ).join('')}
+          <div class="exact-date-field ${state.dateFilter === 'exact' ? 'visible' : ''}">
+            ${renderDateInput('exact-date', state.exactDate)}
+          </div>
+          <div class="date-range-fields ${state.dateFilter === 'range' ? 'visible' : ''}">
+            ${renderDateInput('range-from', state.rangeFrom)}
+            ${renderDateInput('range-to', state.rangeTo)}
+          </div>
+        </div>
+      </div>
     </div>
   `;
 }
 
-function renderManagerPage() {
-  return `
-    <main class="layout manager-layout">
-      <section class="panel">
-        <div class="section-heading manager-form-heading">
-          <h2>Данные от менеджера</h2>
-          <p>После отправки форма очистится, а значения попадут в ручные отправки.</p>
-        </div>
-        <form id="submission-form">
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Показатель</th>
-                  <th class="number-col">Данные от менеджера</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${state.metrics
-                  .map(
-                    (metric) => `
-                      <tr>
-                        <td>${metric.title}</td>
-                        <td class="number-col input-col">
-                          <input
-                            class="metric-input"
-                            data-metric="${metric.code}"
-                            data-is-money="${metric.is_money}"
-                            type="number"
-                            min="0"
-                            step="${metric.is_money ? '0.01' : '1'}"
-                            inputmode="${metric.is_money ? 'decimal' : 'numeric'}"
-                            placeholder="0"
-                            required
-                          >
-                        </td>
-                      </tr>
-                    `,
-                  )
-                  .join('')}
-              </tbody>
-            </table>
-          </div>
-          <div class="actions">
-            <button class="button primary" type="submit">Отправить</button>
-          </div>
-        </form>
-      </section>
+function renderEmployeeFilter() {
+  const selectedCount = state.selectedUserIds.length;
 
-      <section class="panel">
-        <div class="section-heading submissions-heading">
-          <h2>Мои ручные отправки</h2>
+  return `
+    <div class="employee-filter">
+      <label class="field-title">Сотрудники</label>
+      <details class="employee-filter-details">
+        <summary>${selectedCount ? `Выбрано: ${selectedCount}` : 'Выберите сотрудников'}</summary>
+        <div class="employee-filter-menu">
+          <div class="employee-filter-actions">
+            <button id="select-all-users" class="text-button" type="button">Выбрать всех</button>
+            <button id="clear-users" class="text-button" type="button">Снять выбор</button>
+          </div>
+          <div class="employee-options">
+            ${state.users.length
+              ? state.users.map(renderEmployeeOption).join('')
+              : '<div class="empty compact-empty">Сотрудники пока не загружены.</div>'}
+          </div>
         </div>
-        ${renderSubmissions()}
-      </section>
-    </main>
+      </details>
+    </div>
   `;
 }
 
-function renderSubmissions() {
-  if (!state.submissions.length) {
-    return '<div class="empty">Отправок за сегодняшний день нет.</div>';
+function renderEmployeeOption(user: BitrixUser) {
+  const checked = state.selectedUserIds.includes(user.bitrix_user_id);
+
+  return `
+    <label class="employee-option">
+      <input type="checkbox" value="${user.bitrix_user_id}" ${checked ? 'checked' : ''}>
+      <span>${escapeHtml(user.full_name)}</span>
+    </label>
+  `;
+}
+
+function renderSettingsPanel() {
+  return `
+    <details class="settings-panel" ${state.settingsOpen ? 'open' : ''}>
+      <summary>Настройки источников показателей</summary>
+      <form id="settings-form" class="settings-form">
+        <div class="settings-grid">
+          ${renderSelectField(
+            'meeting-entity',
+            'Смарт-процесс встреч',
+            state.settings.meeting_entity_type_id,
+            state.crmTypes.map((item) => ({ value: item.entity_type_id, label: item.title })),
+          )}
+          ${renderSelectField(
+            'meeting-held-stage',
+            'Стадия проведенной встречи',
+            state.settings.meeting_held_stage_ids[0] ?? null,
+            state.meetingStages.map((item) => ({ value: item.status_id, label: item.name })),
+          )}
+          ${renderSelectField(
+            'contract-entity',
+            'Смарт-процесс договоров',
+            state.settings.contract_entity_type_id,
+            state.crmTypes.map((item) => ({ value: item.entity_type_id, label: item.title })),
+          )}
+          ${renderSelectField(
+            'contract-sent-stage',
+            'Стадия договора “отправлен”',
+            state.settings.contract_sent_stage_id,
+            state.contractStages.map((item) => ({ value: item.status_id, label: item.name })),
+          )}
+          ${renderSelectField(
+            'contract-signed-stage',
+            'Стадия договора “подписан”',
+            state.settings.contract_signed_stage_id,
+            state.contractStages.map((item) => ({ value: item.status_id, label: item.name })),
+          )}
+          ${renderSelectField(
+            'cold-base-category',
+            'Воронка холодной базы',
+            state.settings.cold_base_deal_category_id,
+            state.dealCategories.map((item) => ({ value: item.id, label: item.name })),
+          )}
+          ${renderSelectField(
+            'sale-category',
+            'Воронка продажи',
+            state.settings.sale_deal_category_id,
+            state.dealCategories.map((item) => ({ value: item.id, label: item.name })),
+          )}
+          ${renderSelectField(
+            'sale-success-stage',
+            'Стадия успешной сделки',
+            state.settings.sale_success_stage_id,
+            state.saleStages.map((item) => ({ value: item.status_id, label: item.name })),
+          )}
+          ${renderSelectField(
+            'invoice-sent-stage',
+            'Стадия счета “отправлен”',
+            state.settings.invoice_sent_stage_id,
+            state.invoiceStages.map((item) => ({ value: item.status_id, label: item.name })),
+          )}
+          ${renderSelectField(
+            'invoice-paid-stage',
+            'Стадия счета “оплачен”',
+            state.settings.invoice_paid_stage_id,
+            state.invoiceStages.map((item) => ({ value: item.status_id, label: item.name })),
+          )}
+        </div>
+        <div class="settings-actions">
+          <button class="button primary" type="submit">Сохранить настройки</button>
+        </div>
+      </form>
+    </details>
+  `;
+}
+
+function renderSelectField(
+  id: string,
+  label: string,
+  selectedValue: string | number | null,
+  options: { value: string | number; label: string }[],
+) {
+  return `
+    <label class="settings-field">
+      <span>${label}</span>
+      <select id="${id}" ${options.length ? '' : 'disabled'}>
+        <option value="">Выберите значение</option>
+        ${options.map((option) => `
+          <option value="${option.value}" ${String(selectedValue ?? '') === String(option.value) ? 'selected' : ''}>
+            ${escapeHtml(option.label)}
+          </option>
+        `).join('')}
+      </select>
+    </label>
+  `;
+}
+
+function renderDateInput(id: string, isoValue: string) {
+  return `
+    <div class="date-input-wrap">
+      <input id="${id}" class="date-text-input" type="text" inputmode="numeric" value="${isoToDisplayDate(isoValue)}">
+      <input id="${id}-native" class="native-date-input" type="date" value="${isoValue}" tabindex="-1" aria-hidden="true">
+      <button type="button" class="calendar-button" data-target="${id}" aria-label="Открыть календарь">▦</button>
+    </div>
+  `;
+}
+
+function renderReportPanel() {
+  return `
+    <section class="panel">
+      <div class="section-heading">
+        <h2>Системные показатели сотрудников</h2>
+      </div>
+      ${renderReportContent()}
+    </section>
+  `;
+}
+
+function renderReportContent() {
+  if (!state.auth) {
+    return '<div class="empty">Откройте приложение внутри Битрикс24 или передайте временную авторизацию для локальной проверки.</div>';
   }
 
-  return `
-    <div class="submission-list">
-      ${state.submissions
-        .map(
-          (submission) => `
-            <details class="submission-item">
-              <summary>
-                <span>${formatSlot(submission.slot)}</span>
-                <span>${formatDateTime(submission.submitted_at)}</span>
-              </summary>
-              <div class="table-wrap compact">
-                <table>
-                  <tbody>
-                    ${submission.values
-                      .map((value) => {
-                        const metric = state.metrics.find((item) => item.code === value.metric_code);
-                        return `
-                          <tr>
-                            <td>${metric?.title ?? value.metric_code}</td>
-                            <td class="number-col">${formatApiValue(value.value, metric?.is_money ?? false)}</td>
-                          </tr>
-                        `;
-                      })
-                      .join('')}
-                  </tbody>
-                </table>
-              </div>
-            </details>
-          `,
-        )
-        .join('')}
-    </div>
-  `;
-}
+  if (!isSettingsComplete(state.settings)) {
+    return '<div class="empty">Сначала заполните настройки источников показателей.</div>';
+  }
 
-function renderLeaderPage() {
-  return `
-    <main class="layout report-layout">
-      <section class="leader-tabs">
-        <button class="tab active" type="button">Отчет</button>
-        <button id="open-plans" class="tab" type="button">Планы</button>
-      </section>
-      ${renderLeaderDateFilter()}
-      <section class="panel">
-        <div class="section-heading report-heading">
-          <h2>Показатели сотрудников</h2>
-        </div>
-        ${renderReportTable()}
-      </section>
-    </main>
-  `;
-}
+  if (!state.selectedUserIds.length) {
+    return '<div class="empty">Выберите одного или нескольких сотрудников и нажмите “Показать отчет”.</div>';
+  }
 
-function renderReportTable() {
-  if (!state.report?.employees.length) {
-    return '<div class="empty">Выберите сотрудников для отчета во вкладке “Планы”.</div>';
+  if (!state.report) {
+    return '<div class="empty">Отчет еще не загружен.</div>';
+  }
+
+  if (!state.report.employees.length) {
+    return '<div class="empty">За выбранный период данные по выбранным сотрудникам не найдены.</div>';
   }
 
   return `
@@ -338,247 +410,116 @@ function renderReportTable() {
   `;
 }
 
-function renderEmployeeReport(employee: EmployeeReport) {
-  const isOpen = state.openedReportBitrixUserIds.includes(employee.bitrix_user_id);
-  const planLabels = getReportPlanLabels();
+function renderEmployeeReport(employee: EmployeeSystemReport) {
+  const isOpen = state.openedUserIds.includes(employee.bitrix_user_id);
 
   return `
     <section class="employee-report">
       <button class="employee-header ${isOpen ? 'active' : ''}" type="button" data-user="${employee.bitrix_user_id}">
-        <span class="employee-name">${employee.full_name}</span>
+        <span>${escapeHtml(employee.full_name)}</span>
       </button>
-      ${isOpen ? `<div class="table-wrap report-details">
-        <table>
-          <colgroup>
-            <col class="indicator-col">
-            <col class="report-number-col">
-            <col class="report-number-col">
-            <col class="report-number-col">
-            <col class="report-number-col">
-            <col class="report-status-col">
-          </colgroup>
-          <thead>
-            <tr>
-              <th>Показатель</th>
-              <th class="number-col">Менеджер</th>
-              <th class="number-col">Система</th>
-              <th class="number-col">Расхождение</th>
-              <th class="number-col">${planLabels.plan}</th>
-              <th>${planLabels.status}</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${employee.metrics
-              .map((metric) => {
-                return `
-                  <tr>
-                    <td>${metric.metric_title}</td>
-                    <td class="number-col">${formatApiValue(metric.manager_value, metric.is_money)}</td>
-                    <td class="number-col">${formatApiValue(metric.system_value, metric.is_money)}</td>
-                    <td class="number-col">${formatApiValue(metric.difference, metric.is_money)}</td>
-                    <td class="number-col">${formatApiValue(metric.plan_value, metric.is_money)}</td>
-                    <td><span class="plan-status ${metric.plan_status}">${formatPlanStatus(metric.plan_status)}</span></td>
-                  </tr>
-                `;
-              })
-              .join('')}
-          </tbody>
-        </table>
-      </div>` : ''}
+      ${isOpen ? renderEmployeeMetrics(employee) : ''}
     </section>
   `;
 }
 
-function renderPlansPage() {
-  const managerUsers = getPlanUsers();
-  const openedPlanUserIds = new Set(state.openedPlanBitrixUserIds);
-
+function renderEmployeeMetrics(employee: EmployeeSystemReport) {
   return `
-    <main class="layout plans-layout">
-      <section class="leader-tabs">
-        <button id="open-report" class="tab" type="button">Отчет</button>
-        <button class="tab active" type="button">Планы</button>
-      </section>
-      <section class="toolbar">
-        <label class="field">
-          <span>Год</span>
-          <input id="plan-year" type="number" min="2000" value="${state.planYear}">
-        </label>
-        <label class="field">
-          <span>Месяц</span>
-          <input id="plan-month" type="number" min="1" max="12" value="${state.planMonth}">
-        </label>
-        <button id="reload-plans" class="button primary" type="button">Обновить</button>
-        ${renderReportAssigneeSettings()}
-      </section>
-      <section class="panel">
-        <div class="section-heading">
-          <h2>Плановые показатели</h2>
-          <p>Планы задаются на день и месяц для каждого сотрудника.</p>
-        </div>
-        <div class="plan-employee-list">
-          ${managerUsers.length
-            ? managerUsers
-                .map(
-                  (user) => `
-                    <div class="plan-employee-item">
-                      <button
-                        class="plan-employee-button ${openedPlanUserIds.has(user.bitrix_user_id) ? 'active' : ''}"
-                        type="button"
-                        data-user="${user.bitrix_user_id}"
-                      >
-                        ${getUserName(user)}
-                      </button>
-                      ${openedPlanUserIds.has(user.bitrix_user_id) ? renderPlanForm(user) : ''}
-                    </div>
-                  `,
-                )
-                .join('')
-            : '<div class="empty">Выберите сотрудников для отчета в фильтре справа.</div>'}
-        </div>
-      </section>
-    </main>
-  `;
-}
-
-function renderReportAssigneeSettings() {
-  const assignees = state.reportAssignees;
-  if (!assignees) return '';
-
-  const selectedIds = new Set(assignees.selected_bitrix_user_ids);
-
-  return `
-    <div class="assignees-dropdown">
-      <details class="assignees-details">
-        <summary>
-          <span>Сотрудники для отчета</span>
-        </summary>
-        <form id="report-assignees-form" class="assignees-form">
-          <div class="assignee-list">
-            ${assignees.available_users
-              .map(
-                (user) => `
-                  <label class="assignee-option">
-                    <input
-                      type="checkbox"
-                      value="${user.bitrix_user_id}"
-                      ${selectedIds.has(user.bitrix_user_id) ? 'checked' : ''}
-                    >
-                    <span>${getUserName(user)}</span>
-                  </label>
-                `,
-              )
-              .join('')}
-          </div>
-          <div class="actions compact-actions">
-            <button class="button primary" type="submit">Сохранить сотрудников</button>
-          </div>
-        </form>
-      </details>
+    <div class="table-wrap">
+      <table>
+        <colgroup>
+          <col class="metric-title-col">
+          <col class="system-value-col">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Показатель</th>
+            <th class="number-col">Данные системы</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${employee.metrics.map((metric) => `
+            <tr>
+              <td>${escapeHtml(metric.metric_title)}</td>
+              <td class="number-col">${formatValue(metric.system_value, metric.is_money)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
     </div>
   `;
 }
 
-function getPlanUsers() {
-  const assignees = state.reportAssignees;
-  if (!assignees) {
-    return [];
-  }
+function bindEvents() {
+  document.querySelector<HTMLElement>('.date-filter')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+  });
 
-  if (!assignees.selected_bitrix_user_ids.length) {
-    return [];
-  }
+  document.querySelector<HTMLElement>('.employee-filter')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+  });
 
-  const selectedIds = new Set(assignees.selected_bitrix_user_ids);
-  return assignees.available_users.filter((user) => selectedIds.has(user.bitrix_user_id));
-}
-
-function renderPlanForm(user: User) {
-  return `
-    <form class="plans-form plan-employee-form">
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Показатель</th>
-              <th class="number-col">План на день</th>
-              <th class="number-col">План на месяц</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${state.metrics
-              .map((metric) => {
-                const plan = state.plans.find(
-                  (item) =>
-                    item.bitrix_user_id === user.bitrix_user_id &&
-                    item.metric_code === metric.code,
-                );
-
-                return `
-                  <tr>
-                    <td>${metric.title}</td>
-                    <td class="number-col plan-input-col">
-                      <input
-                        class="plan-input"
-                        data-user="${user.bitrix_user_id}"
-                        data-metric="${metric.code}"
-                        data-kind="daily"
-                        data-is-money="${metric.is_money}"
-                        type="number"
-                        min="0"
-                        step="${metric.is_money ? '0.01' : '1'}"
-                        value="${formatInputValue(plan?.daily_value ?? '0', metric.is_money)}"
-                        required
-                      >
-                    </td>
-                    <td class="number-col plan-input-col">
-                      <input
-                        class="plan-input"
-                        data-user="${user.bitrix_user_id}"
-                        data-metric="${metric.code}"
-                        data-kind="monthly"
-                        data-is-money="${metric.is_money}"
-                        type="number"
-                        min="0"
-                        step="${metric.is_money ? '0.01' : '1'}"
-                        value="${formatInputValue(plan?.monthly_value ?? '0', metric.is_money)}"
-                        required
-                      >
-                    </td>
-                  </tr>
-                `;
-              })
-              .join('')}
-          </tbody>
-        </table>
-      </div>
-      <div class="actions">
-        <button class="button primary" type="submit">Сохранить планы</button>
-      </div>
-    </form>
-  `;
-}
-
-function bindCommonEvents() {
-  document.querySelector<HTMLButtonElement>('#reload-data')?.addEventListener('click', () => {
-    if (state.selectedUser?.role === 'leader') {
-      applyLeaderDateFilter();
-    } else {
-      syncPeriodFromInputs();
+  document.querySelector<HTMLButtonElement>('#date-dropdown-btn')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const dropdown = document.querySelector<HTMLElement>('#date-dropdown-content');
+    const shouldOpen = !dropdown?.classList.contains('open');
+    closeDropdowns();
+    if (shouldOpen) {
+      dropdown?.classList.add('open');
     }
-    state.notice = null;
-    void runWithState(loadCurrentViewData);
   });
 
-  document.querySelector<HTMLButtonElement>('#leader-date-dropdown-btn')?.addEventListener('click', () => {
-    document.querySelector<HTMLElement>('#leader-date-dropdown-content')?.classList.toggle('open');
+  document.querySelector<HTMLDetailsElement>('.employee-filter-details')?.addEventListener('toggle', (event) => {
+    const details = event.currentTarget;
+    if (!(details instanceof HTMLDetailsElement) || !details.open) return;
+    closeDateDropdown();
   });
 
-  document.querySelectorAll<HTMLButtonElement>('.date-option').forEach((option) => {
-    option.addEventListener('click', () => {
-      state.leaderDateFilter = option.dataset.value ?? 'any';
-      updateLeaderDateDropdownDom();
+  document.querySelector<HTMLDetailsElement>('.settings-panel')?.addEventListener('toggle', (event) => {
+    const details = event.currentTarget;
+    if (details instanceof HTMLDetailsElement) {
+      state.settingsOpen = details.open;
+    }
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('.date-option').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      state.dateFilter = button.dataset.value as DateFilterValue;
+      if (state.dateFilter === 'exact' || state.dateFilter === 'range') {
+        render();
+        document.querySelector<HTMLElement>('#date-dropdown-content')?.classList.add('open');
+        return;
+      }
+
+      closeDateDropdown();
+      render();
     });
+  });
+
+  document.querySelectorAll<HTMLInputElement>('.employee-option input').forEach((input) => {
+    input.addEventListener('change', () => {
+      const userId = Number(input.value);
+      state.selectedUserIds = input.checked
+        ? [...state.selectedUserIds, userId]
+        : state.selectedUserIds.filter((id) => id !== userId);
+      state.openedUserIds = state.openedUserIds.filter((id) => state.selectedUserIds.includes(id));
+      state.report = null;
+      render();
+    });
+  });
+
+  document.querySelector<HTMLButtonElement>('#select-all-users')?.addEventListener('click', () => {
+    state.selectedUserIds = state.users.map((user) => user.bitrix_user_id);
+    state.report = null;
+    render();
+  });
+
+  document.querySelector<HTMLButtonElement>('#clear-users')?.addEventListener('click', () => {
+    state.selectedUserIds = [];
+    state.openedUserIds = [];
+    state.report = null;
+    render();
   });
 
   document.querySelectorAll<HTMLButtonElement>('.calendar-button').forEach((button) => {
@@ -607,271 +548,272 @@ function bindCommonEvents() {
     });
   });
 
-  document.querySelector<HTMLButtonElement>('#open-plans')?.addEventListener('click', () => {
-    state.view = 'plans';
-    state.openedPlanBitrixUserIds = [];
-    state.notice = null;
-    void runWithState(loadCurrentViewData);
+  document.querySelector<HTMLFormElement>('#settings-form')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void submitSettings();
   });
 
-  document.querySelector<HTMLButtonElement>('#open-report')?.addEventListener('click', () => {
-    state.view = 'main';
-    state.openedReportBitrixUserIds = [];
-    state.notice = null;
-    void runWithState(loadCurrentViewData);
+  document.querySelector<HTMLSelectElement>('#meeting-entity')?.addEventListener('change', (event) => {
+    state.settings.meeting_entity_type_id = numberOrNull((event.currentTarget as HTMLSelectElement).value);
+    state.settings.meeting_held_stage_ids = [];
+    void reloadStageListsAndRender();
   });
 
-  document.querySelector<HTMLButtonElement>('#reload-plans')?.addEventListener('click', () => {
-    syncPlanPeriodFromInputs();
-    state.notice = null;
-    void runWithState(loadCurrentViewData);
+  document.querySelector<HTMLSelectElement>('#contract-entity')?.addEventListener('change', (event) => {
+    state.settings.contract_entity_type_id = numberOrNull((event.currentTarget as HTMLSelectElement).value);
+    state.settings.contract_sent_stage_id = null;
+    state.settings.contract_signed_stage_id = null;
+    void reloadStageListsAndRender();
   });
 
-  document.querySelectorAll<HTMLButtonElement>('.plan-employee-button').forEach((button) => {
-    button.addEventListener('click', () => {
-      const bitrixUserId = Number(button.dataset.user);
-      state.openedPlanBitrixUserIds = state.openedPlanBitrixUserIds.includes(bitrixUserId)
-        ? state.openedPlanBitrixUserIds.filter((id) => id !== bitrixUserId)
-        : [...state.openedPlanBitrixUserIds, bitrixUserId];
-      state.notice = null;
-      render();
-    });
+  document.querySelector<HTMLSelectElement>('#sale-category')?.addEventListener('change', (event) => {
+    state.settings.sale_deal_category_id = numberOrNull((event.currentTarget as HTMLSelectElement).value);
+    state.settings.sale_success_stage_id = null;
+    void reloadStageListsAndRender();
+  });
+
+  document.querySelector<HTMLButtonElement>('#load-report')?.addEventListener('click', () => {
+    void loadReport();
   });
 
   document.querySelectorAll<HTMLButtonElement>('.employee-header').forEach((button) => {
     button.addEventListener('click', () => {
-      const bitrixUserId = Number(button.dataset.user);
-      state.openedReportBitrixUserIds = state.openedReportBitrixUserIds.includes(bitrixUserId)
-        ? state.openedReportBitrixUserIds.filter((id) => id !== bitrixUserId)
-        : [...state.openedReportBitrixUserIds, bitrixUserId];
+      const userId = Number(button.dataset.user);
+      state.openedUserIds = state.openedUserIds.includes(userId)
+        ? state.openedUserIds.filter((id) => id !== userId)
+        : [...state.openedUserIds, userId];
       render();
     });
   });
 
-  document.querySelectorAll<HTMLInputElement>('.metric-input, .plan-input').forEach((input) => {
-    input.addEventListener('change', () => normalizeNumericInput(input));
-  });
-
-  document.querySelector<HTMLFormElement>('#submission-form')?.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    if (!(form instanceof HTMLFormElement) || !form.reportValidity()) return;
-    void submitManagerForm();
-  });
-
-  document.querySelectorAll<HTMLFormElement>('.plans-form').forEach((form) => {
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const allPlanForms = Array.from(document.querySelectorAll<HTMLFormElement>('.plans-form'));
-      if (!allPlanForms.every((item) => item.reportValidity())) return;
-      void submitPlansForm();
-    });
-  });
-
-  document.querySelector<HTMLFormElement>('#report-assignees-form')?.addEventListener('submit', (event) => {
-    event.preventDefault();
-    void submitReportAssigneesForm();
-  });
-
+  document.removeEventListener('click', handleOutsideClick);
+  document.addEventListener('click', handleOutsideClick);
 }
 
-async function submitManagerForm() {
-  if (!state.selectedUser) return;
+async function submitSettings() {
+  if (!state.auth) return;
 
-  const reportDate = getToday();
-  const slot = getCurrentSubmissionSlot();
-  const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('.metric-input'));
-  const values = inputs.map((input) => ({
-    metric_code: input.dataset.metric ?? '',
-    value: getNormalizedInputValue(input),
-  }));
-
-  await runWithState(async () => {
-    await createSubmission({
-      bitrix_user_id: state.selectedUser!.bitrix_user_id,
-      report_date: reportDate,
-      slot,
-      values,
-    });
-    state.dateFrom = reportDate;
-    state.dateTo = reportDate;
-    state.submissions = await getMySubmissions(
-      state.selectedUser!.bitrix_user_id,
-      state.dateFrom,
-      state.dateTo,
-    );
-    state.notice = 'Данные отправлены. Форма очищена.';
-  });
-}
-
-async function submitPlansForm() {
-  if (!state.selectedUser) return;
-
-  syncPlanPeriodFromInputs();
-
-  const rows = new Map<string, {
-    bitrix_user_id: number;
-    metric_code: string;
-    daily_value: string;
-    monthly_value: string;
-  }>();
-
-  document.querySelectorAll<HTMLInputElement>('.plan-input').forEach((input) => {
-    const bitrixUserId = Number(input.dataset.user);
-    const metricCode = input.dataset.metric ?? '';
-    const key = `${bitrixUserId}:${metricCode}`;
-    const current = rows.get(key) ?? {
-      bitrix_user_id: bitrixUserId,
-      metric_code: metricCode,
-      daily_value: '0',
-      monthly_value: '0',
-    };
-
-    if (input.dataset.kind === 'daily') {
-      current.daily_value = getNormalizedInputValue(input);
-    } else {
-      current.monthly_value = getNormalizedInputValue(input);
-    }
-
-    rows.set(key, current);
-  });
-
-  await runWithState(async () => {
-    await savePlans({
-      created_by_bitrix_user_id: state.selectedUser!.bitrix_user_id,
-      plans: Array.from(rows.values()).map((row) => ({
-        ...row,
-        plan_year: state.planYear,
-        plan_month: state.planMonth,
-      })),
-    });
-    state.plans = await getPlans(state.planYear, state.planMonth);
-    state.notice = 'Планы сохранены.';
-  });
-}
-
-async function submitReportAssigneesForm() {
-  const selectedIds = Array.from(
-    document.querySelectorAll<HTMLInputElement>('#report-assignees-form input[type="checkbox"]:checked'),
-  ).map((input) => Number(input.value));
-
-  await runWithState(async () => {
-    await saveReportAssignees(selectedIds);
-    state.reportAssignees = await getReportAssignees();
-    state.users = await getUsers();
-    state.openedPlanBitrixUserIds = state.openedPlanBitrixUserIds.filter((id) =>
-      selectedIds.includes(id),
-    );
-    await loadCurrentViewData();
-    state.notice = 'Сотрудники для отчета сохранены.';
-  });
-}
-
-function normalizeNumericInput(input: HTMLInputElement) {
-  if (input.dataset.isMoney === 'true' || input.value === '') return;
-
-  input.value = getNormalizedInputValue(input);
-}
-
-function getNormalizedInputValue(input: HTMLInputElement) {
-  if (input.value === '') return '0';
-  if (input.dataset.isMoney === 'true') return input.value;
-
-  const numberValue = Number(input.value);
-  if (Number.isNaN(numberValue)) return '0';
-
-  return String(Math.trunc(numberValue));
-}
-
-function getCurrentSubmissionSlot() {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'morning';
-  if (hour < 16) return 'afternoon';
-  return 'evening';
-}
-
-function syncPeriodFromInputs() {
-  state.dateFrom = displayToIsoDate(
-    document.querySelector<HTMLInputElement>('#date-from')?.value || state.dateFrom,
-  );
-  state.dateTo = displayToIsoDate(
-    document.querySelector<HTMLInputElement>('#date-to')?.value || state.dateTo,
-  );
-}
-
-function applyLeaderDateFilter() {
-  if (state.leaderDateFilter === 'exact') {
-    const exactDate = displayToIsoDate(
-      document.querySelector<HTMLInputElement>('#leader-exact-date')?.value || state.leaderExactDate,
-    );
-    state.leaderExactDate = exactDate;
-    state.dateFrom = exactDate;
-    state.dateTo = exactDate;
+  collectSettingsFromForm();
+  if (!isSettingsComplete(state.settings)) {
+    state.statusMessage = 'Заполните все настройки источников показателей.';
+    render();
     return;
   }
 
-  if (state.leaderDateFilter === 'range') {
-    const rangeFrom = displayToIsoDate(
-      document.querySelector<HTMLInputElement>('#leader-range-from')?.value || state.leaderRangeFrom,
+  await runWithState(async () => {
+    state.settings = await saveMetricSettings(state.auth!, state.settings);
+    state.settingsOpen = false;
+    state.report = null;
+    state.statusMessage = 'Настройки источников сохранены в Битрикс24.';
+  });
+}
+
+async function reloadStageListsAndRender() {
+  if (!state.auth) return;
+  await runWithState(async () => {
+    await reloadStageLists();
+    state.statusMessage = 'Списки стадий обновлены. Продолжите настройку источников.';
+  });
+}
+
+async function reloadStageLists() {
+  if (!state.auth) return;
+
+  const tasks: Promise<void>[] = [];
+
+  if (state.settings.meeting_entity_type_id) {
+    tasks.push(
+      getStages(state.auth, state.settings.meeting_entity_type_id).then((items) => {
+        state.meetingStages = items;
+      }),
     );
-    const rangeTo = displayToIsoDate(
-      document.querySelector<HTMLInputElement>('#leader-range-to')?.value || state.leaderRangeTo,
+  } else {
+    state.meetingStages = [];
+  }
+
+  if (state.settings.contract_entity_type_id) {
+    tasks.push(
+      getStages(state.auth, state.settings.contract_entity_type_id).then((items) => {
+        state.contractStages = items;
+      }),
     );
-    state.leaderRangeFrom = rangeFrom;
-    state.leaderRangeTo = rangeTo;
-    state.dateFrom = rangeFrom;
-    state.dateTo = rangeTo;
+  } else {
+    state.contractStages = [];
+  }
+
+  tasks.push(
+    getStages(state.auth, state.settings.invoice_entity_type_id, 0).then((items) => {
+      state.invoiceStages = items;
+    }),
+  );
+
+  if (state.settings.sale_deal_category_id !== null) {
+    tasks.push(
+      getStages(state.auth, 2, state.settings.sale_deal_category_id).then((items) => {
+        state.saleStages = items;
+      }),
+    );
+  } else {
+    state.saleStages = [];
+  }
+
+  await Promise.all(tasks);
+}
+
+async function loadReport() {
+  if (!state.auth) return;
+
+  collectSettingsFromForm();
+  if (!isSettingsComplete(state.settings)) {
+    state.settingsOpen = true;
+    state.statusMessage = 'Сначала заполните настройки источников показателей.';
+    render();
     return;
   }
 
-  const range = getPresetDateRange(state.leaderDateFilter);
+  applyDateFilter();
+  if (!state.selectedUserIds.length) {
+    state.error = 'Выберите хотя бы одного сотрудника.';
+    state.statusMessage = 'Отчет не сформирован: сотрудники не выбраны.';
+    render();
+    return;
+  }
+
+  state.reportLoading = true;
+  state.statusMessage = 'Собираем системные показатели из Битрикс24...';
+  render();
+
+  await runWithState(async () => {
+    state.report = await getSystemReport({
+      auth: state.auth!,
+      date_from: state.dateFrom,
+      date_to: state.dateTo,
+      bitrix_user_ids: state.selectedUserIds,
+      settings: state.settings,
+    });
+    state.openedUserIds = state.report.employees.map((employee) => employee.bitrix_user_id);
+    state.statusMessage = `Системные показатели загружены за период ${isoToDisplayDate(state.dateFrom)} - ${isoToDisplayDate(state.dateTo)}.`;
+  });
+  if (state.error) {
+    state.statusMessage = 'Не удалось загрузить системные показатели. Проверьте настройки и попробуйте снова.';
+  }
+  state.reportLoading = false;
+  render();
+}
+
+function collectSettingsFromForm() {
+  state.settings = {
+    meeting_entity_type_id: numberOrNull(getSelectValue('meeting-entity')),
+    contract_entity_type_id: numberOrNull(getSelectValue('contract-entity')),
+    invoice_entity_type_id: 31,
+    cold_base_deal_category_id: numberOrNull(getSelectValue('cold-base-category')),
+    sale_deal_category_id: numberOrNull(getSelectValue('sale-category')),
+    sale_success_stage_id: stringOrNull(getSelectValue('sale-success-stage')),
+    meeting_held_stage_ids: stringOrNull(getSelectValue('meeting-held-stage'))
+      ? [String(getSelectValue('meeting-held-stage'))]
+      : [],
+    contract_sent_stage_id: stringOrNull(getSelectValue('contract-sent-stage')),
+    contract_signed_stage_id: stringOrNull(getSelectValue('contract-signed-stage')),
+    invoice_sent_stage_id: stringOrNull(getSelectValue('invoice-sent-stage')),
+    invoice_paid_stage_id: stringOrNull(getSelectValue('invoice-paid-stage')),
+  };
+}
+
+function getSelectValue(id: string) {
+  return document.querySelector<HTMLSelectElement>(`#${id}`)?.value ?? '';
+}
+
+function createEmptySettings(): MetricSettings {
+  return {
+    meeting_entity_type_id: null,
+    contract_entity_type_id: null,
+    invoice_entity_type_id: 31,
+    cold_base_deal_category_id: null,
+    sale_deal_category_id: null,
+    sale_success_stage_id: null,
+    meeting_held_stage_ids: [],
+    contract_sent_stage_id: null,
+    contract_signed_stage_id: null,
+    invoice_sent_stage_id: null,
+    invoice_paid_stage_id: null,
+  };
+}
+
+function isSettingsComplete(settings: MetricSettings) {
+  return Boolean(
+    settings.meeting_entity_type_id &&
+    settings.contract_entity_type_id &&
+    settings.cold_base_deal_category_id !== null &&
+    settings.sale_deal_category_id !== null &&
+    settings.sale_success_stage_id &&
+    settings.meeting_held_stage_ids.length &&
+    settings.contract_sent_stage_id &&
+    settings.contract_signed_stage_id &&
+    settings.invoice_sent_stage_id &&
+    settings.invoice_paid_stage_id,
+  );
+}
+
+function handleOutsideClick(event: MouseEvent) {
+  const target = event.target;
+  if (!(target instanceof Node)) return;
+
+  if (!document.querySelector('.date-filter')?.contains(target)) {
+    closeDateDropdown();
+  }
+
+  if (!document.querySelector('.employee-filter')?.contains(target)) {
+    closeEmployeeDropdown();
+  }
+}
+
+function closeDropdowns() {
+  closeDateDropdown();
+  closeEmployeeDropdown();
+}
+
+function closeDateDropdown() {
+  document.querySelector<HTMLElement>('#date-dropdown-content')?.classList.remove('open');
+}
+
+function closeEmployeeDropdown() {
+  const details = document.querySelector<HTMLDetailsElement>('.employee-filter-details');
+  if (details) {
+    details.open = false;
+  }
+}
+
+function applyDateFilter() {
+  if (state.dateFilter === 'exact') {
+    const date = displayToIsoDate(
+      document.querySelector<HTMLInputElement>('#exact-date')?.value || state.exactDate,
+    );
+    state.exactDate = date;
+    state.dateFrom = date;
+    state.dateTo = date;
+    return;
+  }
+
+  if (state.dateFilter === 'range') {
+    const from = displayToIsoDate(
+      document.querySelector<HTMLInputElement>('#range-from')?.value || state.rangeFrom,
+    );
+    const to = displayToIsoDate(
+      document.querySelector<HTMLInputElement>('#range-to')?.value || state.rangeTo,
+    );
+    state.rangeFrom = from;
+    state.rangeTo = to;
+    state.dateFrom = from;
+    state.dateTo = to;
+    return;
+  }
+
+  const range = getPresetDateRange(state.dateFilter);
   state.dateFrom = range.from;
   state.dateTo = range.to;
 }
 
-function getDateFilterLabel(value: string) {
-  return DATE_FILTER_OPTIONS.find((option) => option.value === value)?.label ?? 'Любая дата';
-}
-
-function getReportPlanLabels() {
-  if (state.dateFrom === state.dateTo) {
-    return {
-      plan: 'План дня',
-      status: 'Выполнение',
-    };
-  }
-
-  if (isFullMonthRange(state.dateFrom, state.dateTo)) {
-    return {
-      plan: 'План месяца',
-      status: 'Выполнение',
-    };
-  }
-
-  return {
-    plan: 'План периода',
-    status: 'Выполнение',
-  };
-}
-
-function updateLeaderDateDropdownDom() {
-  const button = document.querySelector<HTMLButtonElement>('#leader-date-dropdown-btn');
-  const exactField = document.querySelector<HTMLElement>('.exact-date-field');
-  const rangeFields = document.querySelector<HTMLElement>('.date-range-fields');
-
-  if (button) {
-    button.textContent = getDateFilterLabel(state.leaderDateFilter);
-  }
-
-  document.querySelectorAll<HTMLButtonElement>('.date-option').forEach((option) => {
-    option.classList.toggle('selected', option.dataset.value === state.leaderDateFilter);
-  });
-
-  exactField?.classList.toggle('visible', state.leaderDateFilter === 'exact');
-  rangeFields?.classList.toggle('visible', state.leaderDateFilter === 'range');
-}
-
-function getPresetDateRange(value: string) {
+function getPresetDateRange(value: DateFilterValue) {
   const today = new Date();
   const todayIso = toIsoDate(today);
 
@@ -887,15 +829,12 @@ function getPresetDateRange(value: string) {
 
   if (value === 'this_week') {
     const start = startOfWeek(today);
-    const end = addDays(start, 6);
-    return { from: toIsoDate(start), to: toIsoDate(end) };
+    return { from: toIsoDate(start), to: toIsoDate(addDays(start, 6)) };
   }
 
   if (value === 'last_week') {
-    const thisWeekStart = startOfWeek(today);
-    const start = addDays(thisWeekStart, -7);
-    const end = addDays(start, 6);
-    return { from: toIsoDate(start), to: toIsoDate(end) };
+    const start = addDays(startOfWeek(today), -7);
+    return { from: toIsoDate(start), to: toIsoDate(addDays(start, 6)) };
   }
 
   if (value === 'this_month') {
@@ -912,7 +851,11 @@ function getPresetDateRange(value: string) {
     };
   }
 
-  return { from: '2000-01-01', to: todayIso };
+  return { from: todayIso, to: todayIso };
+}
+
+function getDateFilterLabel(value: DateFilterValue) {
+  return DATE_FILTER_OPTIONS.find((option) => option.value === value)?.label ?? 'Вчера';
 }
 
 function startOfWeek(value: Date) {
@@ -935,36 +878,8 @@ function toIsoDate(value: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function parseIsoDate(value: string) {
-  const [year, month, day] = value.split('-').map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function isFullMonthRange(dateFrom: string, dateTo: string) {
-  const start = parseIsoDate(dateFrom);
-  const end = parseIsoDate(dateTo);
-  const firstDay = new Date(start.getFullYear(), start.getMonth(), 1);
-  const lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0);
-
-  return (
-    start.getTime() === firstDay.getTime() &&
-    end.getTime() === lastDay.getTime()
-  );
-}
-
-function syncPlanPeriodFromInputs() {
-  state.planYear = Number(document.querySelector<HTMLInputElement>('#plan-year')?.value || state.planYear);
-  state.planMonth = Number(document.querySelector<HTMLInputElement>('#plan-month')?.value || state.planMonth);
-}
-
 function getToday() {
   return toIsoDate(new Date());
-}
-
-function getYesterday() {
-  const date = new Date();
-  date.setDate(date.getDate() - 1);
-  return toIsoDate(date);
 }
 
 function isoToDisplayDate(value: string) {
@@ -981,56 +896,25 @@ function displayToIsoDate(value: string) {
   if (!match) return trimmed;
 
   const [, rawDay, rawMonth, year] = match;
-  const day = rawDay.padStart(2, '0');
-  const month = rawMonth.padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return `${year}-${rawMonth.padStart(2, '0')}-${rawDay.padStart(2, '0')}`;
 }
 
-function getUserName(user: User) {
-  return user.full_name || [user.first_name, user.last_name].filter(Boolean).join(' ') || `ID ${user.bitrix_user_id}`;
+function numberOrNull(value: string) {
+  if (!value) return null;
+  const numberValue = Number(value);
+  return Number.isNaN(numberValue) ? null : numberValue;
 }
 
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
+function stringOrNull(value: string) {
+  return value || null;
 }
 
-function formatSlot(slot: string) {
-  const labels: Record<string, string> = {
-    morning: 'Утро',
-    afternoon: 'День',
-    evening: 'Вечер',
-  };
-  return labels[slot] ?? slot;
-}
-
-function formatPlanStatus(status: string) {
-  const labels: Record<string, string> = {
-    no_plan: 'План не задан',
-    not_completed: 'Не выполнено',
-    completed: 'Выполнено',
-    over_completed: 'Перевыполнено',
-  };
-  return labels[status] ?? status;
-}
-
-function formatApiValue(value: string, isMoney: boolean) {
+function formatValue(value: string, isMoney: boolean) {
   const numberValue = Number(value);
   return new Intl.NumberFormat('ru-RU', {
     minimumFractionDigits: isMoney ? 2 : 0,
     maximumFractionDigits: isMoney ? 2 : 0,
-  }).format(numberValue);
-}
-
-function formatInputValue(value: string, isMoney: boolean) {
-  const numberValue = Number(value);
-  if (Number.isNaN(numberValue)) return '0';
-  return isMoney ? numberValue.toFixed(2) : String(Math.trunc(numberValue));
+  }).format(Number.isNaN(numberValue) ? 0 : numberValue);
 }
 
 function escapeHtml(value: string) {

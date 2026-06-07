@@ -1,4 +1,13 @@
-import type { AuthUserPayload, Metric, Plan, Report, ReportAssignees, Submission, User } from './types';
+import type {
+  BitrixAuthPayload,
+  BitrixUser,
+  Category,
+  CrmType,
+  Metric,
+  MetricSettings,
+  Stage,
+  SystemReport,
+} from './types';
 
 declare global {
   interface Window {
@@ -23,82 +32,96 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Request failed: ${response.status}`);
+    throw new Error(await getErrorMessage(response));
   }
 
   return response.json() as Promise<T>;
+}
+
+async function getErrorMessage(response: Response): Promise<string> {
+  const text = await response.text();
+  if (!text) {
+    return `Ошибка запроса: ${response.status}`;
+  }
+
+  try {
+    const payload = JSON.parse(text) as { detail?: unknown };
+    if (typeof payload.detail === 'string') {
+      return payload.detail;
+    }
+  } catch {
+    return text;
+  }
+
+  return text;
 }
 
 export function getMetrics(): Promise<Metric[]> {
   return request<Metric[]>('/metrics');
 }
 
-export function authMe(payload: AuthUserPayload): Promise<User> {
-  return request<User>('/auth/me', {
+export function getBitrixUsers(auth: BitrixAuthPayload): Promise<BitrixUser[]> {
+  return request<BitrixUser[]>('/bitrix/users', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ auth }),
   });
 }
 
-export function getUsers(): Promise<User[]> {
-  return request<User[]>('/users');
-}
-
-export function getReport(dateFrom: string, dateTo: string): Promise<Report> {
-  return request<Report>(`/reports?date_from=${dateFrom}&date_to=${dateTo}`);
-}
-
-export function getMySubmissions(
-  bitrixUserId: number,
-  dateFrom: string,
-  dateTo: string,
-): Promise<Submission[]> {
-  return request<Submission[]>(
-    `/submissions/my?bitrix_user_id=${bitrixUserId}&date_from=${dateFrom}&date_to=${dateTo}`,
-  );
-}
-
-export function createSubmission(payload: {
-  bitrix_user_id: number;
-  report_date: string;
-  slot: string;
-  values: { metric_code: string; value: string }[];
-}): Promise<Submission> {
-  return request<Submission>('/submissions', {
+export function getSavedMetricSettings(auth: BitrixAuthPayload): Promise<MetricSettings | null> {
+  return request<MetricSettings | null>('/bitrix/settings/get', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ auth }),
   });
 }
 
-export function getPlans(year: number, month: number): Promise<Plan[]> {
-  return request<Plan[]>(`/plans?plan_year=${year}&plan_month=${month}`);
-}
-
-export function savePlans(payload: {
-  created_by_bitrix_user_id: number;
-  plans: {
-    bitrix_user_id: number;
-    metric_code: string;
-    plan_year: number;
-    plan_month: number;
-    daily_value: string;
-    monthly_value: string;
-  }[];
-}): Promise<Plan[]> {
-  return request<Plan[]>('/plans', {
+export function saveMetricSettings(
+  auth: BitrixAuthPayload,
+  settings: MetricSettings,
+): Promise<MetricSettings> {
+  return request<MetricSettings>('/bitrix/settings/save', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ auth, settings }),
   });
 }
 
-export function getReportAssignees(): Promise<ReportAssignees> {
-  return request<ReportAssignees>('/report-settings/assignees');
+export function getCrmTypes(auth: BitrixAuthPayload): Promise<CrmType[]> {
+  return request<CrmType[]>('/bitrix/crm-types', {
+    method: 'POST',
+    body: JSON.stringify({ auth }),
+  });
 }
 
-export function saveReportAssignees(bitrixUserIds: number[]): Promise<{ selected_bitrix_user_ids: number[] }> {
-  return request<{ selected_bitrix_user_ids: number[] }>('/report-settings/assignees', {
+export function getCategories(auth: BitrixAuthPayload, entityTypeId: number): Promise<Category[]> {
+  return request<Category[]>('/bitrix/categories', {
     method: 'POST',
-    body: JSON.stringify({ bitrix_user_ids: bitrixUserIds }),
+    body: JSON.stringify({ auth, entity_type_id: entityTypeId }),
+  });
+}
+
+export function getStages(
+  auth: BitrixAuthPayload,
+  entityTypeId: number,
+  categoryId = 0,
+): Promise<Stage[]> {
+  return request<Stage[]>('/bitrix/stages', {
+    method: 'POST',
+    body: JSON.stringify({
+      auth,
+      entity_type_id: entityTypeId,
+      category_id: categoryId,
+    }),
+  });
+}
+
+export function getSystemReport(payload: {
+  auth: BitrixAuthPayload;
+  date_from: string;
+  date_to: string;
+  bitrix_user_ids: number[];
+  settings: MetricSettings;
+}): Promise<SystemReport> {
+  return request<SystemReport>('/bitrix/system-report', {
+    method: 'POST',
+    body: JSON.stringify(payload),
   });
 }

@@ -3,41 +3,68 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.integrations.bitrix import BitrixRestClient
-from app.schemas.bitrix_settings import (
+from app.schemas.bitrix_stateless import (
+    BitrixAuthPayload,
     BitrixCategoryRead,
-    BitrixConnectionCheck,
     BitrixCrmTypeRead,
-    BitrixFieldRead,
+    BitrixMetricSettings,
     BitrixStageRead,
 )
+from app.services.bitrix_stateless_service import build_client
 
 
 DEAL_ENTITY_TYPE_ID = 2
 INVOICE_ENTITY_TYPE_ID = 31
 DEFAULT_INVOICE_CATEGORY_ID = 1
+SETTINGS_OPTION_NAME = "manager_report_metric_settings"
 
 
-def check_bitrix_connection() -> BitrixConnectionCheck:
-    client = BitrixRestClient()
-    payload = client.call("user.current")
-    result = payload.get("result", {})
-    user_name = " ".join(
-        part for part in (result.get("NAME"), result.get("LAST_NAME")) if part
+def get_saved_metric_settings(auth: BitrixAuthPayload) -> BitrixMetricSettings | None:
+    client = build_client(auth)
+    payload = client.call("app.option.get", {"option": SETTINGS_OPTION_NAME})
+    raw_value = payload.get("result")
+    if raw_value is None:
+        return None
+
+    if isinstance(raw_value, dict):
+        raw_value = raw_value.get(SETTINGS_OPTION_NAME) or raw_value.get("value")
+
+    if not raw_value:
+        return None
+
+    try:
+        return BitrixMetricSettings.model_validate_json(str(raw_value))
+    except ValueError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Bitrix24 returned invalid metric settings.",
+        ) from error
+
+
+def save_metric_settings(
+    auth: BitrixAuthPayload,
+    metric_settings: BitrixMetricSettings,
+) -> BitrixMetricSettings:
+    client = build_client(auth)
+    client.call(
+        "app.option.set",
+        {
+            "options": {
+                SETTINGS_OPTION_NAME: metric_settings.model_dump_json(),
+            },
+        },
     )
-    return BitrixConnectionCheck(
-        ok=True,
-        message=f"Connection ok: {user_name or result.get('ID') or 'Bitrix24'}",
-    )
+    return metric_settings
 
 
-def get_crm_types() -> list[BitrixCrmTypeRead]:
-    client = BitrixRestClient()
+def get_crm_types(auth: BitrixAuthPayload) -> list[BitrixCrmTypeRead]:
+    client = build_client(auth)
     rows = client.list_all("crm.type.list")
     return [serialize_crm_type(row) for row in rows]
 
 
-def get_categories(entity_type_id: int) -> list[BitrixCategoryRead]:
-    client = BitrixRestClient()
+def get_categories(auth: BitrixAuthPayload, entity_type_id: int) -> list[BitrixCategoryRead]:
+    client = build_client(auth)
     rows = client.list_all(
         "crm.category.list",
         {"entityTypeId": entity_type_id},
@@ -53,8 +80,12 @@ def get_categories(entity_type_id: int) -> list[BitrixCategoryRead]:
     ]
 
 
-def get_stages(entity_type_id: int, category_id: int = 0) -> list[BitrixStageRead]:
-    client = BitrixRestClient()
+def get_stages(
+    auth: BitrixAuthPayload,
+    entity_type_id: int,
+    category_id: int = 0,
+) -> list[BitrixStageRead]:
+    client = build_client(auth)
     resolved_category_id = resolve_stage_category_id(client, entity_type_id, category_id)
     entity_id = get_stage_entity_id(entity_type_id, resolved_category_id)
     rows = client.list_all(
@@ -77,29 +108,6 @@ def get_stages(entity_type_id: int, category_id: int = 0) -> list[BitrixStageRea
             semantics=optional_str(first_present(row, "SEMANTICS", "semantics")),
         )
         for row in rows
-    ]
-
-
-def get_fields(entity_type_id: int) -> list[BitrixFieldRead]:
-    client = BitrixRestClient()
-    payload = client.call(
-        "crm.item.fields",
-        {"entityTypeId": entity_type_id},
-    )
-    result = payload.get("result", {})
-    fields = result.get("fields", result if isinstance(result, dict) else {})
-    if not isinstance(fields, dict):
-        raise HTTPException(status_code=502, detail="Unexpected crm.item.fields response")
-
-    return [
-        BitrixFieldRead(
-            code=code,
-            title=str(field.get("title") or field.get("formLabel") or code),
-            type=optional_str(field.get("type")),
-            raw=field,
-        )
-        for code, field in fields.items()
-        if isinstance(field, dict)
     ]
 
 

@@ -4,22 +4,31 @@ from time import sleep
 import httpx
 from fastapi import HTTPException
 
-from app.core.config import get_settings
-
-
 class BitrixRestClient:
-    def __init__(self, webhook_url: str | None = None) -> None:
-        settings = get_settings()
-        self.webhook_url = (webhook_url or settings.bitrix_webhook_url or "").rstrip("/")
-        if not self.webhook_url:
+    def __init__(
+        self,
+        webhook_url: str | None = None,
+        domain: str | None = None,
+        access_token: str | None = None,
+    ) -> None:
+        self.domain = normalize_domain(domain) if domain else None
+        self.access_token = access_token
+        self.webhook_url = (webhook_url or "").rstrip("/")
+        if not self.webhook_url and not (self.domain and self.access_token):
             raise HTTPException(
                 status_code=500,
-                detail="BITRIX_WEBHOOK_URL is not configured",
+                detail="Bitrix auth is not configured",
             )
 
     def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        url = f"{self.webhook_url}/{method}.json"
-        response = self.post_with_retry(url, params or {})
+        request_params = dict(params or {})
+        if self.domain and self.access_token:
+            url = f"https://{self.domain}/rest/{method}.json"
+            request_params["auth"] = self.access_token
+        else:
+            url = f"{self.webhook_url}/{method}.json"
+
+        response = self.post_with_retry(url, request_params)
         payload = response.json()
 
         if "error" in payload:
@@ -84,3 +93,11 @@ def get_result_items(result: dict[str, Any]) -> list[dict[str, Any]]:
             return value
 
     return []
+
+
+def normalize_domain(value: str) -> str:
+    return (
+        value.replace("https://", "")
+        .replace("http://", "")
+        .strip("/")
+    )
