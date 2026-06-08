@@ -38,7 +38,7 @@ class BitrixSystemReportRequest(BaseModel):
     date_from: date
     date_to: date
     bitrix_user_ids: list[int] = Field(default_factory=list)
-    settings: BitrixMetricSettings
+    settings: BitrixMetricSettings | None = None
 
 
 class BitrixSystemMetricRead(BaseModel):
