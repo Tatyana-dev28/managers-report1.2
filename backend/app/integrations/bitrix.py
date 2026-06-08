@@ -29,7 +29,18 @@ class BitrixRestClient:
             url = f"{self.webhook_url}/{method}.json"
 
         response = self.post_with_retry(url, request_params)
-        payload = response.json()
+
+        # Если HTTP статус 4xx (например, 401 нет прав на voximplant),
+        # возвращаем пустой результат — данные недоступны
+        if response.status_code >= 400:
+            return {"result": []}
+
+        try:
+            payload = response.json()
+        except Exception:
+            # Если тело ответа не JSON (например, HTML страница ошибки),
+            # возвращаем пустой результат
+            return {"result": []}
 
         if "error" in payload:
             error_code = str(payload.get("error", ""))
@@ -52,11 +63,15 @@ class BitrixRestClient:
                 response = httpx.post(url, json=params, timeout=30)
                 # 4xx ошибки от Битрикс24 (например, 401 нет прав на метод) не кидаем,
                 # а возвращаем как есть — call() обработает payload
-                if response.status_code < 400 or 400 <= response.status_code < 500:
+                if response.status_code < 500:
                     return response
                 response.raise_for_status()
                 return response
             except httpx.HTTPStatusError as error:
+                # 4xx ошибки (например, 401 нет прав) возвращаем как есть,
+                # чтобы call() мог обработать payload и вернуть пустой результат
+                if error.response.status_code < 500:
+                    return error.response
                 raise HTTPException(
                     status_code=502,
                     detail=f"Bitrix HTTP error {error.response.status_code}: {error.response.text}",
