@@ -15,6 +15,7 @@ from app.schemas.bitrix_stateless import (
     BitrixUserRead,
 )
 from app.services.bitrix_system_metrics import collect_bitrix_system_metrics
+from app.services.bitrix_metric_sources_service import detect_metric_sources
 
 
 def build_client(auth: BitrixAuthPayload) -> BitrixRestClient:
@@ -32,7 +33,6 @@ def get_bitrix_users(auth: BitrixAuthPayload) -> list[BitrixUserRead]:
             },
         },
     )
-
     return [
         serialize_user(row)
         for row in rows
@@ -40,12 +40,29 @@ def get_bitrix_users(auth: BitrixAuthPayload) -> list[BitrixUserRead]:
     ]
 
 
+def convert_detected_to_settings(detected) -> BitrixMetricSettings:
+
+    return BitrixMetricSettings(
+        meeting_entity_type_id=detected.meeting_entity_type_id,
+        contract_entity_type_id=detected.contract_entity_type_id,
+        invoice_entity_type_id=detected.invoice_entity_type_id,
+        cold_base_deal_category_id=detected.cold_base_deal_category_id,
+        sale_deal_category_id=detected.sale_deal_category_id,
+        sale_success_stage_id=detected.sale_success_stage_id,
+        meeting_held_stage_ids=list(detected.meeting_held_stage_ids),
+        contract_sent_stage_id=detected.contract_sent_stage_id,
+        contract_signed_stage_id=detected.contract_signed_stage_id,
+        invoice_sent_stage_id=detected.invoice_sent_stage_id,
+        invoice_paid_stage_id=detected.invoice_paid_stage_id,
+    )
+
+
 def build_system_report(
     auth: BitrixAuthPayload,
     date_from: date,
     date_to: date,
     bitrix_user_ids: list[int],
-    metric_settings: BitrixMetricSettings,
+    metric_settings: BitrixMetricSettings | None = None, 
 ) -> BitrixSystemReportRead:
     if date_to < date_from:
         raise HTTPException(
@@ -53,7 +70,11 @@ def build_system_report(
             detail="date_to must be greater than or equal to date_from",
         )
 
-    ensure_metric_settings_ready(metric_settings)
+    client = build_client(auth)
+    
+    detected = detect_metric_sources(client)
+    metric_settings = convert_detected_to_settings(detected)
+
     if not bitrix_user_ids:
         return BitrixSystemReportRead(
             date_from=date_from,
@@ -61,7 +82,6 @@ def build_system_report(
             employees=[],
         )
 
-    client = build_client(auth)
     users_by_id = {
         user.bitrix_user_id: user
         for user in get_bitrix_users(auth)
@@ -132,25 +152,3 @@ def as_int(value: Any) -> int | None:
 
 def as_optional_str(value: Any) -> str | None:
     return None if value is None else str(value)
-
-
-def ensure_metric_settings_ready(settings: BitrixMetricSettings) -> None:
-    required_values = {
-        "meeting_entity_type_id": settings.meeting_entity_type_id,
-        "contract_entity_type_id": settings.contract_entity_type_id,
-        "cold_base_deal_category_id": settings.cold_base_deal_category_id,
-        "sale_deal_category_id": settings.sale_deal_category_id,
-        "sale_success_stage_id": settings.sale_success_stage_id,
-        "meeting_held_stage_ids": settings.meeting_held_stage_ids,
-        "contract_sent_stage_id": settings.contract_sent_stage_id,
-        "contract_signed_stage_id": settings.contract_signed_stage_id,
-        "invoice_sent_stage_id": settings.invoice_sent_stage_id,
-        "invoice_paid_stage_id": settings.invoice_paid_stage_id,
-    }
-    missing = [name for name, value in required_values.items() if value is None or value == "" or value == []]
-    if missing:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Не заполнены настройки источников показателей: {', '.join(missing)}",
-        )
-    BitrixMetricSettings,

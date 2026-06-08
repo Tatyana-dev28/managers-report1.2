@@ -1,23 +1,14 @@
 import {
   getBitrixUsers,
-  getCategories,
-  getCrmTypes,
   getMetrics,
-  getSavedMetricSettings,
-  getStages,
   getSystemReport,
-  saveMetricSettings,
 } from './api';
 import { getBitrixAuth } from './bitrix';
 import type {
   BitrixAuthPayload,
   BitrixUser,
-  Category,
-  CrmType,
   EmployeeSystemReport,
   Metric,
-  MetricSettings,
-  Stage,
   SystemReport,
 } from './types';
 import logoUrl from './assets/sapp-logo.svg';
@@ -36,14 +27,6 @@ type AppState = {
   auth: BitrixAuthPayload | null;
   metrics: Metric[];
   users: BitrixUser[];
-  crmTypes: CrmType[];
-  dealCategories: Category[];
-  meetingStages: Stage[];
-  contractStages: Stage[];
-  invoiceStages: Stage[];
-  saleStages: Stage[];
-  settings: MetricSettings;
-  settingsOpen: boolean;
   selectedUserIds: number[];
   openedUserIds: number[];
   dateFilter: DateFilterValue;
@@ -78,14 +61,6 @@ const state: AppState = {
   auth: null,
   metrics: [],
   users: [],
-  crmTypes: [],
-  dealCategories: [],
-  meetingStages: [],
-  contractStages: [],
-  invoiceStages: [],
-  saleStages: [],
-  settings: createEmptySettings(),
-  settingsOpen: true,
   selectedUserIds: [],
   openedUserIds: [],
   dateFilter: 'yesterday',
@@ -113,25 +88,13 @@ export async function startApp() {
 
     state.auth = auth;
     state.metrics = metrics;
-    state.statusMessage = 'Получаем сотрудников и настройки источников из Битрикс24...';
+    state.statusMessage = 'Получаем сотрудников из Битрикс24...';
     render();
 
-    const [users, savedSettings, crmTypes, dealCategories] = await Promise.all([
-      getBitrixUsers(auth),
-      getSavedMetricSettings(auth),
-      getCrmTypes(auth),
-      getCategories(auth, 2),
-    ]);
-
+    const users = await getBitrixUsers(auth);
     state.users = users;
-    state.crmTypes = crmTypes;
-    state.dealCategories = dealCategories;
-    state.settings = savedSettings ?? createEmptySettings();
-    state.settingsOpen = !isSettingsComplete(state.settings);
-    await reloadStageLists();
-    state.statusMessage = state.settingsOpen
-      ? 'Заполните настройки источников показателей перед формированием отчета.'
-      : 'Выберите фильтры и сотрудников для формирования отчета.';
+
+    state.statusMessage = 'Выберите фильтры и сотрудников для формирования отчета.';
   });
 }
 
@@ -170,7 +133,6 @@ function render() {
 
       <main class="layout">
         ${renderToolbar()}
-        ${renderSettingsPanel()}
         ${renderReportPanel()}
       </main>
     </div>
@@ -265,102 +227,6 @@ function renderEmployeeOption(user: BitrixUser) {
   `;
 }
 
-function renderSettingsPanel() {
-  return `
-    <details class="settings-panel" ${state.settingsOpen ? 'open' : ''}>
-      <summary>Настройки источников показателей</summary>
-      <form id="settings-form" class="settings-form">
-        <div class="settings-grid">
-          ${renderSelectField(
-            'meeting-entity',
-            'Смарт-процесс встреч',
-            state.settings.meeting_entity_type_id,
-            state.crmTypes.map((item) => ({ value: item.entity_type_id, label: item.title })),
-          )}
-          ${renderSelectField(
-            'meeting-held-stage',
-            'Стадия проведенной встречи',
-            state.settings.meeting_held_stage_ids[0] ?? null,
-            state.meetingStages.map((item) => ({ value: item.status_id, label: item.name })),
-          )}
-          ${renderSelectField(
-            'contract-entity',
-            'Смарт-процесс договоров',
-            state.settings.contract_entity_type_id,
-            state.crmTypes.map((item) => ({ value: item.entity_type_id, label: item.title })),
-          )}
-          ${renderSelectField(
-            'contract-sent-stage',
-            'Стадия договора “отправлен”',
-            state.settings.contract_sent_stage_id,
-            state.contractStages.map((item) => ({ value: item.status_id, label: item.name })),
-          )}
-          ${renderSelectField(
-            'contract-signed-stage',
-            'Стадия договора “подписан”',
-            state.settings.contract_signed_stage_id,
-            state.contractStages.map((item) => ({ value: item.status_id, label: item.name })),
-          )}
-          ${renderSelectField(
-            'cold-base-category',
-            'Воронка холодной базы',
-            state.settings.cold_base_deal_category_id,
-            state.dealCategories.map((item) => ({ value: item.id, label: item.name })),
-          )}
-          ${renderSelectField(
-            'sale-category',
-            'Воронка продажи',
-            state.settings.sale_deal_category_id,
-            state.dealCategories.map((item) => ({ value: item.id, label: item.name })),
-          )}
-          ${renderSelectField(
-            'sale-success-stage',
-            'Стадия успешной сделки',
-            state.settings.sale_success_stage_id,
-            state.saleStages.map((item) => ({ value: item.status_id, label: item.name })),
-          )}
-          ${renderSelectField(
-            'invoice-sent-stage',
-            'Стадия счета “отправлен”',
-            state.settings.invoice_sent_stage_id,
-            state.invoiceStages.map((item) => ({ value: item.status_id, label: item.name })),
-          )}
-          ${renderSelectField(
-            'invoice-paid-stage',
-            'Стадия счета “оплачен”',
-            state.settings.invoice_paid_stage_id,
-            state.invoiceStages.map((item) => ({ value: item.status_id, label: item.name })),
-          )}
-        </div>
-        <div class="settings-actions">
-          <button class="button primary" type="submit">Сохранить настройки</button>
-        </div>
-      </form>
-    </details>
-  `;
-}
-
-function renderSelectField(
-  id: string,
-  label: string,
-  selectedValue: string | number | null,
-  options: { value: string | number; label: string }[],
-) {
-  return `
-    <label class="settings-field">
-      <span>${label}</span>
-      <select id="${id}" ${options.length ? '' : 'disabled'}>
-        <option value="">Выберите значение</option>
-        ${options.map((option) => `
-          <option value="${option.value}" ${String(selectedValue ?? '') === String(option.value) ? 'selected' : ''}>
-            ${escapeHtml(option.label)}
-          </option>
-        `).join('')}
-      </select>
-    </label>
-  `;
-}
-
 function renderDateInput(id: string, isoValue: string) {
   return `
     <div class="date-input-wrap">
@@ -385,10 +251,6 @@ function renderReportPanel() {
 function renderReportContent() {
   if (!state.auth) {
     return '<div class="empty">Откройте приложение внутри Битрикс24 или передайте временную авторизацию для локальной проверки.</div>';
-  }
-
-  if (!isSettingsComplete(state.settings)) {
-    return '<div class="empty">Сначала заполните настройки источников показателей.</div>';
   }
 
   if (!state.selectedUserIds.length) {
@@ -451,35 +313,43 @@ function renderEmployeeMetrics(employee: EmployeeSystemReport) {
 }
 
 function bindEvents() {
+  // Закрываем dropdown при клике вне
+  document.removeEventListener('click', handleOutsideClick);
+  document.addEventListener('click', handleOutsideClick);
+
+  // Клик по кнопке фильтра даты
+  document.querySelector<HTMLButtonElement>('#date-dropdown-btn')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const dropdown = document.querySelector<HTMLElement>('#date-dropdown-content');
+    const shouldOpen = !dropdown?.classList.contains('open');
+    
+    // Закрываем фильтр сотрудников перед открытием фильтра даты
+    closeEmployeeDropdown();
+    
+    if (shouldOpen) {
+      dropdown?.classList.add('open');
+    } else {
+      closeDateDropdown();
+    }
+  });
+
+  // Открытие фильтра сотрудников
+  document.querySelector<HTMLDetailsElement>('.employee-filter-details')?.addEventListener('toggle', (event) => {
+    const details = event.currentTarget;
+    if (!(details instanceof HTMLDetailsElement)) return;
+    
+    if (details.open) {
+      // Если открываем сотрудников — закрываем фильтр даты
+      closeDateDropdown();
+    }
+  });
+
   document.querySelector<HTMLElement>('.date-filter')?.addEventListener('click', (event) => {
     event.stopPropagation();
   });
 
   document.querySelector<HTMLElement>('.employee-filter')?.addEventListener('click', (event) => {
     event.stopPropagation();
-  });
-
-  document.querySelector<HTMLButtonElement>('#date-dropdown-btn')?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    const dropdown = document.querySelector<HTMLElement>('#date-dropdown-content');
-    const shouldOpen = !dropdown?.classList.contains('open');
-    closeDropdowns();
-    if (shouldOpen) {
-      dropdown?.classList.add('open');
-    }
-  });
-
-  document.querySelector<HTMLDetailsElement>('.employee-filter-details')?.addEventListener('toggle', (event) => {
-    const details = event.currentTarget;
-    if (!(details instanceof HTMLDetailsElement) || !details.open) return;
-    closeDateDropdown();
-  });
-
-  document.querySelector<HTMLDetailsElement>('.settings-panel')?.addEventListener('toggle', (event) => {
-    const details = event.currentTarget;
-    if (details instanceof HTMLDetailsElement) {
-      state.settingsOpen = details.open;
-    }
   });
 
   document.querySelectorAll<HTMLButtonElement>('.date-option').forEach((button) => {
@@ -548,30 +418,6 @@ function bindEvents() {
     });
   });
 
-  document.querySelector<HTMLFormElement>('#settings-form')?.addEventListener('submit', (event) => {
-    event.preventDefault();
-    void submitSettings();
-  });
-
-  document.querySelector<HTMLSelectElement>('#meeting-entity')?.addEventListener('change', (event) => {
-    state.settings.meeting_entity_type_id = numberOrNull((event.currentTarget as HTMLSelectElement).value);
-    state.settings.meeting_held_stage_ids = [];
-    void reloadStageListsAndRender();
-  });
-
-  document.querySelector<HTMLSelectElement>('#contract-entity')?.addEventListener('change', (event) => {
-    state.settings.contract_entity_type_id = numberOrNull((event.currentTarget as HTMLSelectElement).value);
-    state.settings.contract_sent_stage_id = null;
-    state.settings.contract_signed_stage_id = null;
-    void reloadStageListsAndRender();
-  });
-
-  document.querySelector<HTMLSelectElement>('#sale-category')?.addEventListener('change', (event) => {
-    state.settings.sale_deal_category_id = numberOrNull((event.currentTarget as HTMLSelectElement).value);
-    state.settings.sale_success_stage_id = null;
-    void reloadStageListsAndRender();
-  });
-
   document.querySelector<HTMLButtonElement>('#load-report')?.addEventListener('click', () => {
     void loadReport();
   });
@@ -585,91 +431,10 @@ function bindEvents() {
       render();
     });
   });
-
-  document.removeEventListener('click', handleOutsideClick);
-  document.addEventListener('click', handleOutsideClick);
-}
-
-async function submitSettings() {
-  if (!state.auth) return;
-
-  collectSettingsFromForm();
-  if (!isSettingsComplete(state.settings)) {
-    state.statusMessage = 'Заполните все настройки источников показателей.';
-    render();
-    return;
-  }
-
-  await runWithState(async () => {
-    state.settings = await saveMetricSettings(state.auth!, state.settings);
-    state.settingsOpen = false;
-    state.report = null;
-    state.statusMessage = 'Настройки источников сохранены в Битрикс24.';
-  });
-}
-
-async function reloadStageListsAndRender() {
-  if (!state.auth) return;
-  await runWithState(async () => {
-    await reloadStageLists();
-    state.statusMessage = 'Списки стадий обновлены. Продолжите настройку источников.';
-  });
-}
-
-async function reloadStageLists() {
-  if (!state.auth) return;
-
-  const tasks: Promise<void>[] = [];
-
-  if (state.settings.meeting_entity_type_id) {
-    tasks.push(
-      getStages(state.auth, state.settings.meeting_entity_type_id).then((items) => {
-        state.meetingStages = items;
-      }),
-    );
-  } else {
-    state.meetingStages = [];
-  }
-
-  if (state.settings.contract_entity_type_id) {
-    tasks.push(
-      getStages(state.auth, state.settings.contract_entity_type_id).then((items) => {
-        state.contractStages = items;
-      }),
-    );
-  } else {
-    state.contractStages = [];
-  }
-
-  tasks.push(
-    getStages(state.auth, state.settings.invoice_entity_type_id, 0).then((items) => {
-      state.invoiceStages = items;
-    }),
-  );
-
-  if (state.settings.sale_deal_category_id !== null) {
-    tasks.push(
-      getStages(state.auth, 2, state.settings.sale_deal_category_id).then((items) => {
-        state.saleStages = items;
-      }),
-    );
-  } else {
-    state.saleStages = [];
-  }
-
-  await Promise.all(tasks);
 }
 
 async function loadReport() {
   if (!state.auth) return;
-
-  collectSettingsFromForm();
-  if (!isSettingsComplete(state.settings)) {
-    state.settingsOpen = true;
-    state.statusMessage = 'Сначала заполните настройки источников показателей.';
-    render();
-    return;
-  }
 
   applyDateFilter();
   if (!state.selectedUserIds.length) {
@@ -689,69 +454,28 @@ async function loadReport() {
       date_from: state.dateFrom,
       date_to: state.dateTo,
       bitrix_user_ids: state.selectedUserIds,
-      settings: state.settings,
+      settings: {
+        meeting_entity_type_id: null,
+        contract_entity_type_id: null,
+        invoice_entity_type_id: 31,
+        cold_base_deal_category_id: null,
+        sale_deal_category_id: null,
+        sale_success_stage_id: null,
+        meeting_held_stage_ids: [],
+        contract_sent_stage_id: null,
+        contract_signed_stage_id: null,
+        invoice_sent_stage_id: null,
+        invoice_paid_stage_id: null,
+      },
     });
     state.openedUserIds = state.report.employees.map((employee) => employee.bitrix_user_id);
     state.statusMessage = `Системные показатели загружены за период ${isoToDisplayDate(state.dateFrom)} - ${isoToDisplayDate(state.dateTo)}.`;
   });
   if (state.error) {
-    state.statusMessage = 'Не удалось загрузить системные показатели. Проверьте настройки и попробуйте снова.';
+    state.statusMessage = 'Не удалось загрузить системные показатели. Проверьте подключение и попробуйте снова.';
   }
   state.reportLoading = false;
   render();
-}
-
-function collectSettingsFromForm() {
-  state.settings = {
-    meeting_entity_type_id: numberOrNull(getSelectValue('meeting-entity')),
-    contract_entity_type_id: numberOrNull(getSelectValue('contract-entity')),
-    invoice_entity_type_id: 31,
-    cold_base_deal_category_id: numberOrNull(getSelectValue('cold-base-category')),
-    sale_deal_category_id: numberOrNull(getSelectValue('sale-category')),
-    sale_success_stage_id: stringOrNull(getSelectValue('sale-success-stage')),
-    meeting_held_stage_ids: stringOrNull(getSelectValue('meeting-held-stage'))
-      ? [String(getSelectValue('meeting-held-stage'))]
-      : [],
-    contract_sent_stage_id: stringOrNull(getSelectValue('contract-sent-stage')),
-    contract_signed_stage_id: stringOrNull(getSelectValue('contract-signed-stage')),
-    invoice_sent_stage_id: stringOrNull(getSelectValue('invoice-sent-stage')),
-    invoice_paid_stage_id: stringOrNull(getSelectValue('invoice-paid-stage')),
-  };
-}
-
-function getSelectValue(id: string) {
-  return document.querySelector<HTMLSelectElement>(`#${id}`)?.value ?? '';
-}
-
-function createEmptySettings(): MetricSettings {
-  return {
-    meeting_entity_type_id: null,
-    contract_entity_type_id: null,
-    invoice_entity_type_id: 31,
-    cold_base_deal_category_id: null,
-    sale_deal_category_id: null,
-    sale_success_stage_id: null,
-    meeting_held_stage_ids: [],
-    contract_sent_stage_id: null,
-    contract_signed_stage_id: null,
-    invoice_sent_stage_id: null,
-    invoice_paid_stage_id: null,
-  };
-}
-
-function isSettingsComplete(settings: MetricSettings) {
-  return Boolean(
-    settings.meeting_entity_type_id &&
-    settings.contract_entity_type_id &&
-    settings.cold_base_deal_category_id !== null &&
-    settings.sale_deal_category_id !== null &&
-    settings.sale_success_stage_id &&
-    settings.meeting_held_stage_ids.length &&
-    settings.contract_sent_stage_id &&
-    settings.contract_signed_stage_id &&
-    settings.invoice_sent_stage_id &&
-    settings.invoice_paid_stage_id,
-  );
 }
 
 function handleOutsideClick(event: MouseEvent) {
@@ -765,11 +489,6 @@ function handleOutsideClick(event: MouseEvent) {
   if (!document.querySelector('.employee-filter')?.contains(target)) {
     closeEmployeeDropdown();
   }
-}
-
-function closeDropdowns() {
-  closeDateDropdown();
-  closeEmployeeDropdown();
 }
 
 function closeDateDropdown() {
@@ -897,16 +616,6 @@ function displayToIsoDate(value: string) {
 
   const [, rawDay, rawMonth, year] = match;
   return `${year}-${rawMonth.padStart(2, '0')}-${rawDay.padStart(2, '0')}`;
-}
-
-function numberOrNull(value: string) {
-  if (!value) return null;
-  const numberValue = Number(value);
-  return Number.isNaN(numberValue) ? null : numberValue;
-}
-
-function stringOrNull(value: string) {
-  return value || null;
 }
 
 function formatValue(value: string, isMoney: boolean) {

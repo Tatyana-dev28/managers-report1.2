@@ -1,0 +1,16 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env.production
+    ports:
+      - "127.0.0.1:8098:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_BASE_URL: "/api"
+    ports:
+      - "127.0.0.1:8099:80"
