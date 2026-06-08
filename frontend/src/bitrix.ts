@@ -4,95 +4,30 @@ declare global {
   interface Window {
     BX24?: {
       init: (callback: () => void) => void;
-      getAuth: (callback: (params: any) => void) => void;
+      getAuth: () => { domain: string; access_token: string; [key: string]: any } | null;
     };
   }
 }
 
-const AUTH_TIMEOUT_MS = 30_000;
-const AUTH_RETRY_DELAY_MS = 2_000;
-const MAX_AUTH_RETRIES = 3;
-
-export async function getBitrixAuth(): Promise<BitrixAuthPayload> {
-  if (!window.BX24) {
-    console.warn('BX24 not found, using local auth');
-    return getLocalAuth();
-  }
-
-  console.log('Getting auth from BX24...');
-
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= MAX_AUTH_RETRIES; attempt++) {
-    try {
-      const auth = await tryGetAuth(attempt);
-      
-      const domain = auth.domain || auth.DOMAIN;
-      const accessToken = auth.access_token || auth.ACCESS_TOKEN || auth.AUTH_ID;
-      
-      if (domain && accessToken) {
-        console.log('Auth successful for domain:', domain);
-        return { domain, access_token: accessToken };
-      }
-      
-      console.warn(`Auth attempt ${attempt}: missing domain or token, retrying...`, auth);
-      lastError = new Error('Битрикс24 не передал данные авторизации.');
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error('Unknown auth error');
-      console.warn(`Auth attempt ${attempt} failed:`, lastError.message);
-      
-      if (attempt < MAX_AUTH_RETRIES) {
-        await delay(AUTH_RETRY_DELAY_MS);
-      }
-    }
-  }
-
-  // Если все попытки не удались — пробуем получить auth из URL (на случай если приложение в iframe)
-  const urlAuth = tryGetUrlAuth();
-  if (urlAuth) {
-    console.log('Auth recovered from URL parameters');
-    return urlAuth;
-  }
-
-  throw lastError || new Error('Timeout getting auth from BX24');
-}
-
-function tryGetAuth(attempt: number): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error(`Timeout getting auth from BX24 (attempt ${attempt})`));
-    }, AUTH_TIMEOUT_MS);
-    
-    if (window.BX24 && typeof window.BX24.getAuth === 'function') {
-      window.BX24.getAuth((params: any) => {
-        clearTimeout(timeout);
-        console.log(`Auth received (attempt ${attempt}):`, params);
-        resolve(params);
-      });
-    } else {
-      clearTimeout(timeout);
-      reject(new Error('BX24.getAuth is not a function'));
-    }
-  });
-}
-
+/**
+ * Пытается получить auth из параметров URL (query или hash).
+ * Битрикс24 иногда передаёт domain и access_token/AUTH_ID в URL iframe.
+ */
 function tryGetUrlAuth(): BitrixAuthPayload | null {
   try {
-    // Битрикс24 иногда передаёт auth параметры в URL iframe
     const params = new URLSearchParams(window.location.search);
-    const domain = params.get('domain') || params.get('DOMAIN');
-    const accessToken = params.get('access_token') || params.get('ACCESS_TOKEN') || params.get('AUTH_ID');
-    
+    const domain = params.get('domain') ?? params.get('DOMAIN');
+    const accessToken = params.get('access_token') ?? params.get('ACCESS_TOKEN') ?? params.get('AUTH_ID');
+
     if (domain && accessToken) {
       return { domain, access_token: accessToken };
     }
-    
-    // Проверяем hash-параметры (некоторые версии Битрикс24 передают auth в hash)
+
     if (window.location.hash) {
       const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
-      const hashDomain = hashParams.get('domain') || hashParams.get('DOMAIN');
-      const hashToken = hashParams.get('access_token') || hashParams.get('ACCESS_TOKEN') || hashParams.get('AUTH_ID');
-      
+      const hashDomain = hashParams.get('domain') ?? hashParams.get('DOMAIN');
+      const hashToken = hashParams.get('access_token') ?? hashParams.get('ACCESS_TOKEN') ?? hashParams.get('AUTH_ID');
+
       if (hashDomain && hashToken) {
         return { domain: hashDomain, access_token: hashToken };
       }
@@ -100,21 +35,65 @@ function tryGetUrlAuth(): BitrixAuthPayload | null {
   } catch {
     // игнорируем ошибки парсинга URL
   }
-  
+
   return null;
 }
 
-function getLocalAuth(): BitrixAuthPayload {
+/**
+ * Пытается получить auth через BX24.getAuth() (синхронный вызов).
+ * Возвращает null, если BX24 не доступен или не вернул данные.
+ */
+function tryGetBx24Auth(): BitrixAuthPayload | null {
+  if (!window.BX24) {
+    return null;
+  }
+
+  const auth = window.BX24.getAuth();
+  if (!auth) {
+    return null;
+  }
+
+  const domain = auth.domain;
+  const accessToken = auth.access_token;
+
+  if (domain && accessToken) {
+    return { domain, access_token: accessToken };
+  }
+
+  return null;
+}
+
+/**
+ * Основная функция получения авторизации.
+ *
+ * Порядок проверки (как в эталонном проекте app_contacts_without_transactions):
+ * 1. Параметры URL (domain + access_token/AUTH_ID) — если есть, используем сразу
+ * 2. BX24 SDK (синхронный getAuth()) — если BX24 доступен
+ * 3. Если BX24 нет — локальный режим (для разработки вне Битрикс24)
+ */
+export async function getBitrixAuth(): Promise<BitrixAuthPayload> {
+  // Шаг 1: проверяем URL-параметры (самый быстрый способ)
   const urlAuth = tryGetUrlAuth();
   if (urlAuth) {
+    console.log('Auth получен из параметров URL');
     return urlAuth;
   }
 
-  throw new Error(
-    'Для локальной проверки добавьте в адрес параметры domain и access_token или откройте приложение внутри Битрикс24.'
-  );
-}
+  // Шаг 2: пробуем BX24 SDK (синхронный вызов, без таймаутов и retry)
+  const bx24Auth = tryGetBx24Auth();
+  if (bx24Auth) {
+    console.log('Auth получен через BX24.getAuth()');
+    return bx24Auth;
+  }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  // Шаг 3: если BX24 нет — локальный режим
+  if (!window.BX24) {
+    console.warn('BX24 не найден, используется локальный режим');
+    throw new Error(
+      'Для локальной проверки добавьте в адрес параметры domain и access_token или откройте приложение внутри Битрикс24.'
+    );
+  }
+
+  // BX24 есть, но getAuth() не вернул данные — ошибка
+  throw new Error('Битрикс24 не передал данные авторизации.');
 }
