@@ -17,7 +17,7 @@ declare global {
   }
 }
 
-const API_BASE_URL = '';
+const API_BASE_URL = 'https://manager-report.sappapp1b24.ru/api';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
