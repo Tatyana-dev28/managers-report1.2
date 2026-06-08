@@ -95,8 +95,9 @@ def build_system_report(
 
     client = build_client(auth)
     
-    detected = detect_metric_sources(client)
-    metric_settings = convert_detected_to_settings(detected)
+    if metric_settings is None:
+        detected = detect_metric_sources(client)
+        metric_settings = convert_detected_to_settings(detected)
 
     if not bitrix_user_ids:
         return BitrixSystemReportRead(
