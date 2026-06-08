@@ -2,14 +2,21 @@ services:
   backend:
     build:
       context: ./backend
+    container_name: managers-report-backend
+    restart: unless-stopped
     env_file:
       - ./backend/.env.production
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     ports:
       - "127.0.0.1:8098:8000"
 
   frontend:
     build:
       context: ./frontend
+    container_name: managers-report-frontend
+    restart: unless-stopped
     environment:
       VITE_API_BASE_URL: "/api"
     ports:
