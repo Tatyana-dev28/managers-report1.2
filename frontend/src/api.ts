@@ -17,7 +17,7 @@ declare global {
   }
 }
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = '';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
