@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -16,6 +17,8 @@ from app.schemas.bitrix_stateless import (
 )
 from app.services.bitrix_system_metrics import collect_bitrix_system_metrics
 from app.services.bitrix_metric_sources_service import detect_metric_sources
+
+MAX_CONCURRENT_WORKERS = 5
 
 
 def build_client(auth: BitrixAuthPayload) -> BitrixRestClient:
@@ -57,12 +60,32 @@ def convert_detected_to_settings(detected) -> BitrixMetricSettings:
     )
 
 
+def _collect_metrics_for_user(
+    bitrix_user_id: int,
+    date_from: date,
+    date_to: date,
+    auth: BitrixAuthPayload,
+    metric_settings: BitrixMetricSettings,
+) -> tuple[int, dict[str, Decimal]]:
+    """Собирает метрики для одного сотрудника. Вызывается в отдельном потоке,
+    поэтому создаёт свой экземпляр клиента (клиенты не потокобезопасны)."""
+    client = build_client(auth)
+    values = collect_bitrix_system_metrics(
+        bitrix_user_id=bitrix_user_id,
+        date_from=date_from,
+        date_to=date_to,
+        client=client,
+        metric_settings=metric_settings,
+    )
+    return bitrix_user_id, values
+
+
 def build_system_report(
     auth: BitrixAuthPayload,
     date_from: date,
     date_to: date,
     bitrix_user_ids: list[int],
-    metric_settings: BitrixMetricSettings | None = None, 
+    metric_settings: BitrixMetricSettings | None = None,
 ) -> BitrixSystemReportRead:
     if date_to < date_from:
         raise HTTPException(
@@ -87,15 +110,36 @@ def build_system_report(
         for user in get_bitrix_users(auth)
     }
 
+    # Собираем метрики параллельно, не более MAX_CONCURRENT_WORKERS одновременно
+    results: dict[int, dict[str, Decimal]] = {}
+    with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_WORKERS) as executor:
+        futures = {
+            executor.submit(
+                _collect_metrics_for_user,
+                bitrix_user_id=uid,
+                date_from=date_from,
+                date_to=date_to,
+                auth=auth,
+                metric_settings=metric_settings,
+            ): uid
+            for uid in bitrix_user_ids
+        }
+        for future in as_completed(futures):
+            uid = futures[future]
+            try:
+                user_id, values = future.result()
+                results[user_id] = values
+            except HTTPException:
+                raise
+            except Exception as error:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Failed to collect metrics for user {uid}: {error}",
+                ) from error
+
     employees: list[BitrixEmployeeSystemReportRead] = []
     for bitrix_user_id in bitrix_user_ids:
-        values = collect_bitrix_system_metrics(
-            bitrix_user_id=bitrix_user_id,
-            date_from=date_from,
-            date_to=date_to,
-            client=client,
-            metric_settings=metric_settings,
-        )
+        values = results.get(bitrix_user_id, {})
         user = users_by_id.get(bitrix_user_id)
         employees.append(
             BitrixEmployeeSystemReportRead(

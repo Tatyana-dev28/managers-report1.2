@@ -9,40 +9,18 @@ declare global {
   }
 }
 
-function initBitrix(): Promise<void> {
-  return new Promise((resolve) => {
-    if (!window.BX24) {
-      console.error('BX24 not available');
-      resolve(); 
-      return;
-    }
-    
-    if (typeof window.BX24.init === 'function') {
-      window.BX24.init(() => {
-        console.log('BX24.init callback executed');
-        resolve();
-      });
-    } else {
-      console.warn('BX24.init is not a function');
-      resolve();
-    }
-  });
-}
-
 export async function getBitrixAuth(): Promise<BitrixAuthPayload> {
   if (!window.BX24) {
     console.warn('BX24 not found, using local auth');
     return getLocalAuth();
   }
 
-  console.log('Waiting for BX24 initialization...');
-  await initBitrix();
-  console.log('BX24 initialized, getting auth...');
+  console.log('Getting auth from BX24...');
   
   const auth = await new Promise<any>((resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error('Timeout getting auth from BX24'));
-    }, 5000);
+    }, 15000);
     
     if (window.BX24 && typeof window.BX24.getAuth === 'function') {
       window.BX24.getAuth((params: any) => {
