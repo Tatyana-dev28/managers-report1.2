@@ -50,6 +50,10 @@ class BitrixRestClient:
         for attempt in range(3):
             try:
                 response = httpx.post(url, json=params, timeout=30)
+                # 4xx ошибки от Битрикс24 (например, 401 нет прав на метод) не кидаем,
+                # а возвращаем как есть — call() обработает payload
+                if response.status_code < 400 or 400 <= response.status_code < 500:
+                    return response
                 response.raise_for_status()
                 return response
             except httpx.HTTPStatusError as error:
