@@ -62,6 +62,7 @@ def detect_metric_sources(client: BitrixRestClient) -> BitrixMetricSources:
     sale_stages = get_stages(client, DEAL_ENTITY_TYPE_ID, sale_category_id)
 
     # Поиск этапов по расширенному списку названий
+    # Если название не найдено, пробуем найти по STATUS_ID (WON, SUCCESS, CLIENT, S и т.д.)
     meeting_held_stage = (
         find_by_title(meeting_stages, "проведен")
         or find_by_title(meeting_stages, "состоял")
@@ -69,30 +70,38 @@ def detect_metric_sources(client: BitrixRestClient) -> BitrixMetricSources:
         or find_by_title(meeting_stages, "завершен")
         or find_by_title(meeting_stages, "done")
         or find_by_title(meeting_stages, "held")
+        or find_by_status_id(meeting_stages, "SUCCESS")
     )
     contract_sent_stage = (
         find_by_title(contract_stages, "отправлен")
         or find_by_title(contract_stages, "направлен")
         or find_by_title(contract_stages, "sent")
+        or find_by_status_id(contract_stages, "CLIENT")
     )
     contract_signed_stage = (
         find_by_title(contract_stages, "подписан")
         or find_by_title(contract_stages, "заключен")
         or find_by_title(contract_stages, "signed")
         or find_by_title(contract_stages, "approved")
+        or find_by_status_id(contract_stages, "UC_DL8B18")
     )
     invoice_sent_stage = (
         find_by_title(invoice_stages, "отправлен")
         or find_by_title(invoice_stages, "выставлен")
         or find_by_title(invoice_stages, "направлен")
         or find_by_title(invoice_stages, "sent")
+        or find_by_status_id(invoice_stages, "S")
     )
     invoice_paid_stage = (
         find_by_title(invoice_stages, "оплачен")
         or find_by_title(invoice_stages, "погашен")
         or find_by_title(invoice_stages, "paid")
+        or find_by_status_id(invoice_stages, "UC_GQECS8")
     )
-    sale_success_stage = find_success_stage(sale_stages)
+    sale_success_stage = (
+        find_success_stage(sale_stages)
+        or find_by_status_id(sale_stages, "WON")
+    )
 
     return BitrixMetricSources(
         meeting_entity_type_id=meeting_entity_type_id,
@@ -168,6 +177,15 @@ def find_by_title(rows: list[dict[str, Any]], *keywords: str) -> dict[str, Any] 
             str(first_present(row, "title", "TITLE", "name", "NAME") or "")
         )
         if all(keyword in title for keyword in normalized_keywords):
+            return row
+    return None
+
+
+def find_by_status_id(rows: list[dict[str, Any]], *status_ids: str) -> dict[str, Any] | None:
+    """Поиск этапа по STATUS_ID (например, WON, SUCCESS, CLIENT, S)."""
+    for row in rows:
+        status_id = str(first_present(row, "STATUS_ID", "statusId") or "")
+        if status_id in status_ids:
             return row
     return None
 
