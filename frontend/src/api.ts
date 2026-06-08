@@ -115,7 +115,7 @@ export function getSystemReport(payload: {
   date_from: string;
   date_to: string;
   bitrix_user_ids: number[];
-  settings: MetricSettings;
+  settings: MetricSettings | null;
 }): Promise<SystemReport> {
   return request<SystemReport>('/bitrix/system-report', {
     method: 'POST',

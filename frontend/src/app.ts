@@ -2,6 +2,7 @@ import {
   getBitrixUsers,
   getMetrics,
   getSystemReport,
+  getSavedMetricSettings,
 } from './api';
 import { getBitrixAuth } from './bitrix';
 import type {
@@ -9,6 +10,7 @@ import type {
   BitrixUser,
   EmployeeSystemReport,
   Metric,
+  MetricSettings,
   SystemReport,
 } from './types';
 import logoUrl from './assets/sapp-logo.svg';
@@ -40,6 +42,7 @@ type AppState = {
   reportLoading: boolean;
   error: string | null;
   statusMessage: string;
+  metricSettings: MetricSettings | null;
 };
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -74,6 +77,7 @@ const state: AppState = {
   reportLoading: false,
   error: null,
   statusMessage: 'Инициализация приложения...',
+  metricSettings: null,
 };
 
 export async function startApp() {
@@ -91,8 +95,12 @@ export async function startApp() {
     state.statusMessage = 'Получаем сотрудников из Битрикс24...';
     render();
 
-    const users = await getBitrixUsers(auth);
+    const [users, savedSettings] = await Promise.all([
+      getBitrixUsers(auth),
+      getSavedMetricSettings(auth),
+    ]);
     state.users = users;
+    state.metricSettings = savedSettings;
 
     state.statusMessage = 'Выберите фильтры и сотрудников для формирования отчета.';
   });
@@ -454,19 +462,7 @@ async function loadReport() {
       date_from: state.dateFrom,
       date_to: state.dateTo,
       bitrix_user_ids: state.selectedUserIds,
-      settings: {
-        meeting_entity_type_id: null,
-        contract_entity_type_id: null,
-        invoice_entity_type_id: 31,
-        cold_base_deal_category_id: null,
-        sale_deal_category_id: null,
-        sale_success_stage_id: null,
-        meeting_held_stage_ids: [],
-        contract_sent_stage_id: null,
-        contract_signed_stage_id: null,
-        invoice_sent_stage_id: null,
-        invoice_paid_stage_id: null,
-      },
+      settings: state.metricSettings,
     });
     state.openedUserIds = state.report.employees.map((employee) => employee.bitrix_user_id);
     state.statusMessage = `Системные показатели загружены за период ${isoToDisplayDate(state.dateFrom)} - ${isoToDisplayDate(state.dateTo)}.`;
