@@ -205,10 +205,16 @@ def find_by_title(rows: list[dict[str, Any]], *keywords: str) -> dict[str, Any] 
 
 
 def find_by_status_id(rows: list[dict[str, Any]], *status_ids: str) -> dict[str, Any] | None:
-    """Поиск этапа по STATUS_ID (например, WON, SUCCESS, CLIENT, S)."""
+    """Поиск этапа по STATUS_ID (например, WON, SUCCESS, CLIENT, S).
+    Поддерживает как полный ID (DT170_17:CLIENT), так и короткий (CLIENT)."""
     for row in rows:
         status_id = str(first_present(row, "STATUS_ID", "statusId") or "")
+        # Проверяем точное совпадение
         if status_id in status_ids:
+            return row
+        # Проверяем совпадение по короткому имени (без префикса DTxxx_xx:)
+        short_id = status_id.split(":")[-1] if ":" in status_id else status_id
+        if short_id in status_ids:
             return row
     return None
 

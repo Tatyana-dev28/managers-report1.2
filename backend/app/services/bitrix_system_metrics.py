@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
@@ -6,6 +7,8 @@ from zoneinfo import ZoneInfo
 from app.core.config import get_settings
 from app.integrations.bitrix import BitrixRestClient
 from app.schemas.bitrix_stateless import BitrixMetricSettings
+
+logger = logging.getLogger(__name__)
 
 
 def collect_bitrix_system_metrics(
@@ -203,7 +206,8 @@ def get_stage_history_rows(
     if not stage_ids:
         return []
 
-    return client.list_all(
+    logger.info(f"=== STAGE HISTORY REQUEST: entityTypeId={entity_type_id}, stage_ids={stage_ids} ===")
+    result = client.list_all(
         "crm.stagehistory.list",
         {
             "entityTypeId": entity_type_id,
@@ -216,6 +220,10 @@ def get_stage_history_rows(
             "select": ["ID", "OWNER_ID", "STAGE_ID", "CATEGORY_ID", "CREATED_TIME"],
         },
     )
+    logger.info(f"=== STAGE HISTORY RESULT: {len(result)} rows ===")
+    if result:
+        logger.info(f"=== STAGE HISTORY FIRST ROW: {result[0]} ===")
+    return result
 
 
 def get_stage_owner_ids_for_user(
