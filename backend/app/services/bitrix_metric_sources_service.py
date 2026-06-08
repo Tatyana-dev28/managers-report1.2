@@ -116,10 +116,10 @@ def detect_metric_sources(client: BitrixRestClient) -> BitrixMetricSources:
         or find_by_status_id(invoice_stages, "S")
     )
     invoice_paid_stage = (
-        find_by_title(invoice_stages, "оплачен")
+        find_by_status_id(invoice_stages, "UC_GQECS8")
+        or find_by_title(invoice_stages, "оплачен")
         or find_by_title(invoice_stages, "погашен")
         or find_by_title(invoice_stages, "paid")
-        or find_by_status_id(invoice_stages, "UC_GQECS8")
     )
     sale_success_stage = (
         find_success_stage(sale_stages)
