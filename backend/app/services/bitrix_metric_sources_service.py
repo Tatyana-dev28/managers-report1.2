@@ -1,7 +1,10 @@
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 from app.integrations.bitrix import BitrixRestClient
+
+logger = logging.getLogger(__name__)
 
 
 DEAL_ENTITY_TYPE_ID = 2
@@ -60,6 +63,26 @@ def detect_metric_sources(client: BitrixRestClient) -> BitrixMetricSources:
     contract_stages = get_stages(client, contract_entity_type_id) if contract_entity_type_id else []
     invoice_stages = get_stages(client, INVOICE_ENTITY_TYPE_ID, DEFAULT_INVOICE_CATEGORY_ID)
     sale_stages = get_stages(client, DEAL_ENTITY_TYPE_ID, sale_category_id)
+
+    # ВРЕМЕННО: логируем этапы для диагностики
+    logger.info("=== DETECTED CRM TYPES ===")
+    for t in crm_types:
+        logger.info(f"  Type: title={t.get('title')}, entityTypeId={t.get('entityTypeId')}")
+    logger.info("=== DEAL CATEGORIES ===")
+    for c in deal_categories:
+        logger.info(f"  Category: name={c.get('name')}, id={c.get('id')}")
+    logger.info(f"=== MEETING STAGES (entityTypeId={meeting_entity_type_id}) ===")
+    for s in meeting_stages:
+        logger.info(f"  Stage: NAME={s.get('NAME')}, STATUS_ID={s.get('STATUS_ID')}, SEMANTICS={s.get('SEMANTICS')}")
+    logger.info(f"=== CONTRACT STAGES (entityTypeId={contract_entity_type_id}) ===")
+    for s in contract_stages:
+        logger.info(f"  Stage: NAME={s.get('NAME')}, STATUS_ID={s.get('STATUS_ID')}, SEMANTICS={s.get('SEMANTICS')}")
+    logger.info(f"=== INVOICE STAGES (entityTypeId={INVOICE_ENTITY_TYPE_ID}) ===")
+    for s in invoice_stages:
+        logger.info(f"  Stage: NAME={s.get('NAME')}, STATUS_ID={s.get('STATUS_ID')}, SEMANTICS={s.get('SEMANTICS')}")
+    logger.info(f"=== SALE STAGES (categoryId={sale_category_id}) ===")
+    for s in sale_stages:
+        logger.info(f"  Stage: NAME={s.get('NAME')}, STATUS_ID={s.get('STATUS_ID')}, SEMANTICS={s.get('SEMANTICS')}")
 
     # Поиск этапов по расширенному списку названий
     # Если название не найдено, пробуем найти по STATUS_ID (WON, SUCCESS, CLIENT, S и т.д.)
