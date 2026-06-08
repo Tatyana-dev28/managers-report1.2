@@ -32,6 +32,11 @@ class BitrixRestClient:
         payload = response.json()
 
         if "error" in payload:
+            error_code = str(payload.get("error", ""))
+            # 401/ACCESS_DENIED — нет прав на метод (например, voximplant.statistic.get),
+            # возвращаем пустой результат вместо ошибки
+            if error_code in ("401", "ACCESS_DENIED", "INVALID_CREDENTIALS", "ERROR_METHOD_NOT_FOUND"):
+                return {"result": []}
             raise HTTPException(
                 status_code=502,
                 detail=f"Bitrix REST error {payload.get('error')}: {payload.get('error_description')}",

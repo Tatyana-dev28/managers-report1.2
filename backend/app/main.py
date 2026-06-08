@@ -21,13 +21,11 @@ async def log_server_errors(request: Request, call_next):
     try:
         response = await call_next(request)
         if response.status_code >= 500:
-            body = await request.body()
             logger.error(
-                "HTTP %s %s -> %s\nRequest body: %s",
+                "HTTP %s %s -> %s",
                 request.method,
                 request.url.path,
                 response.status_code,
-                body.decode("utf-8", errors="replace"),
             )
         return response
     except Exception as exc:
