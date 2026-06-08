@@ -253,6 +253,7 @@ def get_stage_owner_ids_for_user(
     if not owner_ids:
         return set()
 
+    logger.info(f"=== GET_ITEMS: entityTypeId={entity_type_id}, owner_ids={owner_ids}, bitrix_user_id={bitrix_user_id}, category_id={category_id} ===")
     assigned_rows = get_items_by_ids(
         client=client,
         entity_type_id=entity_type_id,
@@ -260,11 +261,13 @@ def get_stage_owner_ids_for_user(
         bitrix_user_id=bitrix_user_id,
         category_id=category_id,
     )
-    return {
+    result = {
         owner_id
         for owner_id in (as_int(row.get("id")) for row in assigned_rows)
         if owner_id is not None
     }
+    logger.info(f"=== GET_ITEMS RESULT: {result} (found {len(assigned_rows)} rows) ===")
+    return result
 
 
 def get_items_by_ids(
