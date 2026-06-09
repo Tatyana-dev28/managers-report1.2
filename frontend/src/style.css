@@ -840,9 +840,15 @@ tbody tr:last-child td {
 
 /* --- Стили для таблицы детализации --- */
 
+.detail-table {
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
 .detail-table th,
 .detail-table td {
-  padding: 3px 4px;
+  padding: 2px 3px !important;
+  white-space: nowrap;
 }
 
 .detail-table th {
@@ -860,7 +866,7 @@ tbody tr:last-child td {
 @media (max-width: 600px) {
   .detail-table th,
   .detail-table td {
-    padding: 2px 3px;
+    padding: 1px 2px !important;
     font-size: 12px;
   }
 }
