@@ -15,6 +15,60 @@ import type {
 } from './types';
 import logoUrl from './assets/sapp-logo.svg';
 
+// Коды метрик звонков, для которых работает Grid-фильтр детализации
+const CALL_METRIC_CODES = new Set([
+  'calls_total',
+  'outgoing_calls',
+  'successful_outgoing_calls',
+  'incoming_calls',
+]);
+
+/**
+ * Формирует URL для открытия страницы детализации звонков Битрикс24
+ * с предустановленным фильтром через grid_filter_fields.
+ *
+ * @param metricCode - код метрики (calls_total, outgoing_calls, etc.)
+ * @param userId - ID сотрудника в Битрикс24
+ * @param dateFrom - дата начала периода (ISO, YYYY-MM-DD)
+ * @param dateTo - дата окончания периода (ISO, YYYY-MM-DD)
+ * @returns URL для BX24.openPath() или null, если метрика не звонковая
+ */
+function buildCallGridFilterUrl(
+  metricCode: string,
+  userId: number,
+  dateFrom: string,
+  dateTo: string,
+): string | null {
+  if (!CALL_METRIC_CODES.has(metricCode)) return null;
+
+  const filterFields: Record<string, string | number> = {
+    PORTAL_USER_ID: userId,
+    CALL_START_DATE_from: dateFrom,
+    CALL_START_DATE_to: dateTo,
+  };
+
+  // Добавляем специфичные фильтры в зависимости от метрики
+  switch (metricCode) {
+    case 'outgoing_calls':
+      filterFields.CALL_TYPE = '1';
+      break;
+    case 'successful_outgoing_calls':
+      filterFields.CALL_TYPE = '1';
+      filterFields.CALL_FAILED_CODE = '200';
+      break;
+    case 'incoming_calls':
+      // Входящие: CALL_TYPE=2 (входящий) или 3 (пропущенный входящий)
+      // Grid-фильтр не поддерживает множественные значения через запятую,
+      // поэтому не фильтруем по CALL_TYPE для входящих — покажем все,
+      // пользователь сможет уточнить вручную
+      break;
+    // calls_total — без дополнительных фильтров, все звонки
+  }
+
+  const filterString = btoa(JSON.stringify(filterFields));
+  return `/report/telephony/?grid_filter_id=telephony_detail&grid_filter_fields=${encodeURIComponent(filterString)}`;
+}
+
 type DateFilterValue =
   | 'today'
   | 'yesterday'
@@ -376,12 +430,23 @@ function renderEmployeeMetrics(employee: EmployeeSystemReport) {
           </tr>
         </thead>
         <tbody>
-          ${employee.metrics.map((metric) => `
+          ${employee.metrics.map((metric) => {
+            const url = buildCallGridFilterUrl(
+              metric.metric_code,
+              employee.bitrix_user_id,
+              state.dateFrom,
+              state.dateTo,
+            );
+            const formattedValue = formatValue(metric.system_value, metric.is_money);
+            const valueHtml = url
+              ? `<a class="metric-link" href="${url}" data-bitrix-path="${escapeHtml(url)}">${formattedValue}</a>`
+              : formattedValue;
+            return `
             <tr>
               <td>${escapeHtml(metric.metric_title)}</td>
-              <td class="number-col">${formatValue(metric.system_value, metric.is_money)}</td>
-            </tr>
-          `).join('')}
+              <td class="number-col">${valueHtml}</td>
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
     </div>
@@ -613,6 +678,17 @@ function bindEvents() {
         ? state.openedUserIds.filter((id) => id !== userId)
         : [...state.openedUserIds, userId];
       render();
+    });
+  });
+
+  // Открытие детализации звонков в Битрикс24 через BX24.openPath()
+  document.querySelectorAll<HTMLAnchorElement>('.metric-link').forEach((link) => {
+    link.addEventListener('click', (event) => {
+      const path = link.dataset.bitrixPath;
+      if (!path || !window.BX24?.openPath) return;
+
+      event.preventDefault();
+      window.BX24.openPath(path);
     });
   });
 }

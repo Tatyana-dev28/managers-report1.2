@@ -671,6 +671,18 @@ tbody tr:last-child td {
   white-space: nowrap;
 }
 
+.metric-link {
+  color: var(--primary);
+  text-decoration: none;
+  cursor: pointer;
+  border-bottom: 1px dashed var(--primary);
+}
+
+.metric-link:hover {
+  color: #0056b3;
+  border-bottom-style: solid;
+}
+
 .empty {
   margin: 16px 20px 0;
   border: 1px solid var(--line);
