@@ -57,7 +57,9 @@ const CALL_TYPE_LABELS: Record<string, string> = {
 type ColumnDef = {
   key: string;
   title: string;
+  /** Ширина в процентах */
   defaultWidth: number;
+  /** Минимальная ширина в процентах */
   minWidth: number;
   /** Функция форматирования значения ячейки */
   render: (call: CallRecord) => string;
@@ -69,36 +71,36 @@ const COLUMNS: ColumnDef[] = [
   {
     key: 'employee',
     title: 'Сотрудник',
-    defaultWidth: 160,
-    minWidth: 80,
+    defaultWidth: 22,
+    minWidth: 10,
     render: (call) => escapeHtml(getEmployeeName(call)),
   },
   {
     key: 'phone',
     title: 'Номер телефона',
-    defaultWidth: 140,
-    minWidth: 80,
+    defaultWidth: 18,
+    minWidth: 10,
     render: (call) => escapeHtml(call.PHONE_NUMBER || '—'),
   },
   {
     key: 'type',
     title: 'Тип звонка',
-    defaultWidth: 120,
-    minWidth: 70,
+    defaultWidth: 16,
+    minWidth: 8,
     render: (call) => CALL_TYPE_LABELS[call.CALL_TYPE] || call.CALL_TYPE,
   },
   {
     key: 'date',
     title: 'Дата и время',
-    defaultWidth: 160,
-    minWidth: 100,
+    defaultWidth: 28,
+    minWidth: 12,
     render: (call) => formatDate(call.CALL_START_DATE),
   },
   {
     key: 'duration',
     title: 'Длительность',
-    defaultWidth: 110,
-    minWidth: 70,
+    defaultWidth: 16,
+    minWidth: 8,
     className: 'number-col',
     render: (call) => formatDuration(call.CALL_DURATION),
   },
@@ -196,7 +198,7 @@ async function loadUserNames(auth: BitrixAuthPayload): Promise<void> {
   }
 }
 
-// --- Состояние колонок (порядок, ширина) ---
+// --- Состояние колонок (ширина в %) ---
 
 type ColumnState = {
   key: string;
@@ -237,131 +239,6 @@ function saveColumnStates(states: ColumnState[]) {
   }
 }
 
-// --- Drag & drop для колонок (без визуальных индикаторов) ---
-
-let dragColIndex: number | null = null;
-
-function initColumnDrag(headerRow: HTMLTableRowElement, states: ColumnState[]) {
-  const ths = headerRow.querySelectorAll<HTMLTableHeaderCellElement>('th');
-
-  ths.forEach((th, index) => {
-    th.draggable = true;
-
-    th.addEventListener('dragstart', (e) => {
-      dragColIndex = index;
-      e.dataTransfer?.setData('text/plain', String(index));
-      if (e.dataTransfer) {
-        e.dataTransfer.effectAllowed = 'move';
-      }
-    });
-
-    th.addEventListener('dragend', () => {
-      dragColIndex = null;
-    });
-
-    th.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      if (dragColIndex === null || dragColIndex === index) return;
-      e.dataTransfer!.dropEffect = 'move';
-    });
-
-    th.addEventListener('drop', (e) => {
-      e.preventDefault();
-      if (dragColIndex === null || dragColIndex === index) return;
-
-      const fromIndex = dragColIndex;
-      const rect = th.getBoundingClientRect();
-      const midX = rect.left + rect.width / 2;
-      let toIndex = index;
-      if (e.clientX > midX) {
-        toIndex = index + 1;
-      }
-
-      const [moved] = states.splice(fromIndex, 1);
-      let adjustedTo = toIndex;
-      if (fromIndex < toIndex) {
-        adjustedTo = toIndex - 1;
-      }
-      states.splice(adjustedTo, 0, moved);
-
-      saveColumnStates(states);
-      applyColumnOrder(states);
-    });
-  });
-}
-
-function applyColumnOrder(states: ColumnState[]) {
-  const table = document.querySelector<HTMLTableElement>('.detail-table');
-  if (!table) return;
-
-  const thead = table.querySelector('thead');
-  const tbody = table.querySelector('tbody');
-  if (!thead || !tbody) return;
-
-  const headerRow = thead.querySelector('tr');
-  if (!headerRow) return;
-
-  const colgroup = table.querySelector('colgroup');
-  if (!colgroup) return;
-
-  const cols = colgroup.querySelectorAll('col');
-  const ths = headerRow.querySelectorAll('th');
-  const rows = tbody.querySelectorAll('tr');
-
-  const colMap = new Map<string, HTMLTableColElement>();
-  const thMap = new Map<string, HTMLTableHeaderCellElement>();
-  const tdMaps: Map<string, HTMLTableCellElement>[] = [];
-
-  cols.forEach((col, i) => {
-    const key = states[i]?.key || COLUMNS[i]?.key;
-    if (key) colMap.set(key, col);
-  });
-
-  ths.forEach((th, i) => {
-    const key = states[i]?.key || COLUMNS[i]?.key;
-    if (key) thMap.set(key, th);
-  });
-
-  rows.forEach((row) => {
-    const tdMap = new Map<string, HTMLTableCellElement>();
-    row.querySelectorAll('td').forEach((td, i) => {
-      const key = states[i]?.key || COLUMNS[i]?.key;
-      if (key) tdMap.set(key, td);
-    });
-    tdMaps.push(tdMap);
-  });
-
-  states.forEach((state, newIndex) => {
-    const col = colMap.get(state.key);
-    const th = thMap.get(state.key);
-    if (col) colgroup.appendChild(col);
-    if (th) headerRow.appendChild(th);
-
-    tdMaps.forEach((tdMap) => {
-      const td = tdMap.get(state.key);
-      if (td) {
-        const row = td.parentElement;
-        if (row) {
-          const refTd = row.children[newIndex];
-          if (refTd && refTd !== td) {
-            row.insertBefore(td, refTd);
-          } else if (!refTd) {
-            row.appendChild(td);
-          }
-        }
-      }
-    });
-  });
-
-  // Обновляем ширину
-  states.forEach((state, i) => {
-    const col = colgroup.querySelectorAll('col')[i];
-    if (col) {
-      col.style.width = `${state.width}px`;
-    }
-  });
-}
-
 // --- Resize колонок (как в эталонном проекте) ---
 
 let resizeColIndex: number | null = null;
@@ -372,7 +249,6 @@ function initColumnResize(headerRow: HTMLTableRowElement, states: ColumnState[])
   const ths = headerRow.querySelectorAll<HTMLTableHeaderCellElement>('th');
 
   ths.forEach((th, index) => {
-    // Создаём ползунок resize как в эталонном проекте
     const resizer = document.createElement('button');
     resizer.className = 'column-resizer';
     resizer.dataset.columnIndex = String(index);
@@ -381,9 +257,20 @@ function initColumnResize(headerRow: HTMLTableRowElement, states: ColumnState[])
     resizer.addEventListener('pointerdown', (event) => {
       event.preventDefault();
 
+      const currentIndex = index;
+      const currentColumn = COLUMNS[currentIndex];
+      const pairedColumn = COLUMNS[currentIndex + 1] ?? COLUMNS[currentIndex - 1];
+      const direction = COLUMNS[currentIndex + 1] ? 1 : -1;
+
+      if (!currentColumn || !pairedColumn) return;
+
       resizeColIndex = index;
       resizeStartX = event.clientX;
       resizeStartWidth = states[index].width;
+
+      const table = document.querySelector<HTMLTableElement>('.detail-table');
+      if (!table) return;
+      const tableWidth = table.getBoundingClientRect().width;
 
       document.body.classList.add('is-resizing-column');
       resizer.setPointerCapture(event.pointerId);
@@ -391,19 +278,25 @@ function initColumnResize(headerRow: HTMLTableRowElement, states: ColumnState[])
       const handlePointerMove = (moveEvent: PointerEvent) => {
         if (resizeColIndex === null) return;
 
-        const colDef = COLUMNS.find((c) => c.key === states[resizeColIndex!].key);
-        const minWidth = colDef?.minWidth || 50;
-        const delta = moveEvent.clientX - resizeStartX;
-        const newWidth = Math.max(minWidth, resizeStartWidth + delta);
+        const deltaPercent = ((moveEvent.clientX - resizeStartX) / tableWidth) * 100 * direction;
+        const pairIndex = currentIndex + 1 < states.length ? currentIndex + 1 : currentIndex - 1;
+        const availableWidth = resizeStartWidth + states[pairIndex].width;
+        const nextCurrentWidth = Math.min(
+          availableWidth - pairedColumn.minWidth,
+          Math.max(currentColumn.minWidth, resizeStartWidth + deltaPercent),
+        );
 
-        states[resizeColIndex!].width = newWidth;
+        states[currentIndex].width = nextCurrentWidth;
+        states[pairIndex].width = availableWidth - nextCurrentWidth;
 
         const colgroup = document.querySelector('colgroup');
         if (colgroup) {
-          const col = colgroup.querySelectorAll('col')[resizeColIndex!];
-          if (col) {
-            col.style.width = `${newWidth}px`;
-          }
+          const cols = colgroup.querySelectorAll('col');
+          states.forEach((state, i) => {
+            if (cols[i]) {
+              cols[i].style.width = `${state.width}%`;
+            }
+          });
         }
       };
 
@@ -451,16 +344,15 @@ function renderTable(calls: CallRecord[], params: DetailParams) {
   columnStates = loadColumnStates();
 
   const colHtml = columnStates
-    .map((state) => `<col style="width:${state.width}px">`)
+    .map((state) => `<col style="width:${state.width}%">`)
     .join('');
 
   const headerHtml = columnStates
-    .map((state, index) => {
+    .map((state) => {
       const colDef = COLUMNS.find((c) => c.key === state.key);
       const className = colDef?.className ? ` class="${colDef.className}"` : '';
       return `<th${className} data-col-key="${state.key}">
         <span class="th-text">${escapeHtml(colDef?.title || state.key)}</span>
-        ${index < columnStates.length - 1 ? '<button class="column-resizer" data-column-index="' + index + '"></button>' : ''}
       </th>`;
     })
     .join('');
@@ -615,7 +507,6 @@ function initTableInteractions() {
 
   const states = loadColumnStates();
 
-  initColumnDrag(headerRow, states);
   initColumnResize(headerRow, states);
 }
 
