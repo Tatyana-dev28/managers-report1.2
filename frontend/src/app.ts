@@ -65,8 +65,10 @@ function buildCallGridFilterUrl(
     // calls_total — без дополнительных фильтров, все звонки
   }
 
-  // Кодируем в Base64 и формируем URL
-  const base64Filter = btoa(JSON.stringify(filterData));
+  // Кодируем в Base64 (с безопасной обработкой Unicode)
+  const jsonStr = JSON.stringify(filterData);
+  const utf8Str = unescape(encodeURIComponent(jsonStr));
+  const base64Filter = btoa(utf8Str);
   return `/telephony/detail.php?grid_filter_id=CRM_TELEPHONY_REPORT_GRID&grid_filter_fields=${encodeURIComponent(base64Filter)}`;
 }
 
@@ -682,14 +684,23 @@ function bindEvents() {
     });
   });
 
-  // Открытие детализации звонков в Битрикс24 через BX24.openPath()
+  // Открытие детализации звонков в Битрикс24
   document.querySelectorAll<HTMLAnchorElement>('.metric-link').forEach((link) => {
     link.addEventListener('click', (event) => {
       const path = link.dataset.bitrixPath;
-      if (!path || !window.BX24?.openPath) return;
+      if (!path) return;
 
       event.preventDefault();
-      window.BX24.openPath(path);
+      console.log('[MetricLink] Navigating to:', path);
+
+      // Пробуем BX24.openPath (навигация внутри портала)
+      if (window.BX24?.openPath) {
+        window.BX24.openPath(path);
+        return;
+      }
+
+      // Fallback: если BX24 нет, просто переходим по ссылке
+      window.location.href = path;
     });
   });
 }
