@@ -837,27 +837,20 @@ tbody tr:last-child td {
   color: #fff;
 }
 
-/* --- Resizer для изменения ширины колонок (как в эталонном проекте) --- */
+/* --- Resizer для изменения ширины колонок --- */
 
 .detail-table th {
   position: relative;
   user-select: none;
-  padding: 0;
-  display: flex;
-  align-items: center;
-}
-
-.detail-table th .th-text {
-  display: block;
-  padding: 6px 7px;
-  flex: 1 1 auto;
-  min-width: 0;
 }
 
 .column-resizer {
-  align-self: stretch;
+  position: absolute;
+  top: 4px;
+  right: -5px;
   width: 10px;
   min-width: 10px;
+  height: calc(100% - 8px);
   border: 0;
   border-radius: 8px;
   background:
@@ -866,6 +859,7 @@ tbody tr:last-child td {
   cursor: col-resize;
   padding: 0;
   opacity: 0.75;
+  z-index: 10;
   transition: background-color 0.15s ease, opacity 0.15s ease;
 }
 
