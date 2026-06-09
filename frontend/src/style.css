@@ -120,7 +120,7 @@ button {
 }
 
 .layout {
-  padding: 18px 22px 30px;
+  padding: 16px 22px 30px;
 }
 
 .toolbar {
@@ -425,8 +425,20 @@ select:focus {
 }
 
 .employee-filter-search {
+  position: relative;
   padding: 6px 10px;
   border-bottom: 1px solid var(--line);
+}
+
+.search-icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  pointer-events: none;
 }
 
 .employee-search-input {
@@ -435,7 +447,7 @@ select:focus {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 0 10px;
+  padding: 0 10px 0 28px;
   font-size: 13px;
   color: var(--text);
   background: #fff;

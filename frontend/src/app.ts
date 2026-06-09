@@ -222,6 +222,10 @@ function renderEmployeeFilter() {
             <button id="clear-users" class="text-button" type="button">Снять выбор</button>
           </div>
           <div class="employee-filter-search">
+            <svg class="search-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M11 11L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
             <input
               id="employee-search-input"
               class="employee-search-input"
