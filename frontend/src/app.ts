@@ -223,8 +223,8 @@ function renderEmployeeFilter() {
           </div>
           <div class="employee-filter-search">
             <svg class="search-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M11 11L15 15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M10 10L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
             <input
               id="employee-search-input"
@@ -640,7 +640,6 @@ async function loadReport() {
       bitrix_user_ids: state.selectedUserIds,
       settings: state.metricSettings,
     });
-    state.openedUserIds = state.report.employees.map((employee) => employee.bitrix_user_id);
     state.statusMessage = `Системные показатели загружены за период ${isoToDisplayDate(state.dateFrom)} - ${isoToDisplayDate(state.dateTo)}.`;
   });
   if (state.error) {

@@ -582,7 +582,7 @@ select:focus {
 
 .section-heading h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -598,14 +598,14 @@ select:focus {
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 34px;
+  min-height: 30px;
   border: 0;
   padding: 0 16px;
   background: #fff;
   color: var(--text);
   text-align: left;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .employee-report:nth-child(even) > .employee-header {
@@ -615,7 +615,7 @@ select:focus {
 .employee-header:hover,
 .employee-header.active {
   background: #eaf4ff;
-  color: var(--blue-dark);
+  color: #2c3137;
 }
 
 .table-wrap {
@@ -639,17 +639,17 @@ table {
 
 th,
 td {
-  padding: 6px 16px;
+  padding: 5px 16px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: middle;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 th {
   color: #22262c;
   background: linear-gradient(180deg, #ffffff 0%, #f5f7fa 100%);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 tbody tr:nth-child(even) td {
