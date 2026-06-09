@@ -236,7 +236,7 @@ function renderEmployeeOption(user: BitrixUser) {
 }
 
 function renderDateInput(id: string, isoValue: string) {
-  const [year, month, day] = isoValue.split('-');
+  const [year, month] = isoValue.split('-');
   return `
     <div class="date-input-wrap">
       <input id="${id}" class="date-text-input" type="text" inputmode="numeric" value="${isoToDisplayDate(isoValue)}">
