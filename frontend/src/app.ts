@@ -236,13 +236,59 @@ function renderEmployeeOption(user: BitrixUser) {
 }
 
 function renderDateInput(id: string, isoValue: string) {
+  const [year, month, day] = isoValue.split('-');
   return `
     <div class="date-input-wrap">
       <input id="${id}" class="date-text-input" type="text" inputmode="numeric" value="${isoToDisplayDate(isoValue)}">
       <button type="button" class="calendar-button" data-target="${id}" aria-label="Открыть календарь">▦</button>
-      <input id="${id}-native" class="native-date-input" type="date" value="${isoValue}" tabindex="-1" aria-hidden="true">
+      <div id="${id}-calendar" class="calendar-popup" style="display:none" data-year="${year}" data-month="${month}">
+        <div class="calendar-header">
+          <button type="button" class="cal-prev" data-target="${id}">◀</button>
+          <span class="cal-title"></span>
+          <button type="button" class="cal-next" data-target="${id}">▶</button>
+        </div>
+        <table class="cal-table">
+          <thead>
+            <tr><th>Пн</th><th>Вт</th><th>Ср</th><th>Чт</th><th>Пт</th><th>Сб</th><th>Вс</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
   `;
+}
+
+function renderCalendarBody(targetId: string, year: number, month: number) {
+  const container = document.querySelector<HTMLDivElement>(`#${targetId}-calendar`);
+  if (!container) return;
+
+  container.dataset.year = String(year);
+  container.dataset.month = String(month);
+
+  const title = container.querySelector('.cal-title');
+  if (title) {
+    const months = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Окторябрь','Ноябрь','Декабрь'];
+    title.textContent = `${months[month - 1]} ${year}`;
+  }
+
+  const tbody = container.querySelector('tbody');
+  if (!tbody) return;
+
+  const firstDay = new Date(year, month - 1, 1).getDay(); // 0=Вс
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const startOffset = firstDay === 0 ? 6 : firstDay - 1; // Пн=0
+
+  let html = '<tr>';
+  for (let i = 0; i < startOffset; i++) {
+    html += '<td></td>';
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cellIdx = (startOffset + d - 1) % 7;
+    if (cellIdx === 0 && d > 1) html += '</tr><tr>';
+    html += `<td><button type="button" class="cal-day" data-target="${targetId}" data-day="${d}">${d}</button></td>`;
+  }
+  html += '</tr>';
+  tbody.innerHTML = html;
 }
 
 function renderReportPanel() {
@@ -400,18 +446,95 @@ function bindEvents() {
     render();
   });
 
-  // Календарь теперь работает через CSS: .native-date-input накладывается
-  // поверх всего .date-input-wrap (position: absolute; inset: 0; opacity: 0).
-  // Клик по кнопке или по области календаря попадает в прозрачный input.
-  // Обработчик не нужен, но оставляем для обратной совместимости.
+  // Кастомный календарь: открытие/закрытие popup
+  document.querySelectorAll<HTMLButtonElement>('.calendar-button').forEach((button) => {
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const targetId = button.dataset.target;
+      if (!targetId) return;
 
-  document.querySelectorAll<HTMLInputElement>('.native-date-input').forEach((input) => {
-    input.addEventListener('change', () => {
-      const textInputId = input.id.replace(/-native$/, '');
-      const textInput = document.querySelector<HTMLInputElement>(`#${textInputId}`);
-      if (textInput) {
-        textInput.value = isoToDisplayDate(input.value);
+      // Закрыть все другие календари
+      document.querySelectorAll('.calendar-popup').forEach((p) => {
+        if (p.id !== `${targetId}-calendar`) {
+          (p as HTMLElement).style.display = 'none';
+        }
+      });
+
+      const popup = document.querySelector<HTMLDivElement>(`#${targetId}-calendar`);
+      if (!popup) return;
+
+      const isVisible = popup.style.display !== 'none';
+      popup.style.display = isVisible ? 'none' : 'block';
+
+      if (!isVisible) {
+        const textInput = document.querySelector<HTMLInputElement>(`#${targetId}`);
+        const displayValue = textInput?.value || '';
+        const iso = displayToIsoDate(displayValue);
+        const [y, m] = iso.split('-');
+        renderCalendarBody(targetId, Number(y), Number(m || '1'));
       }
+    });
+  });
+
+  // Навигация по месяцам
+  document.querySelectorAll<HTMLButtonElement>('.cal-prev').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const targetId = btn.dataset.target;
+      if (!targetId) return;
+      const popup = document.querySelector<HTMLDivElement>(`#${targetId}-calendar`);
+      if (!popup) return;
+      const y = Number(popup.dataset.year);
+      const m = Number(popup.dataset.month);
+      const newM = m === 1 ? 12 : m - 1;
+      const newY = m === 1 ? y - 1 : y;
+      renderCalendarBody(targetId, newY, newM);
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('.cal-next').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const targetId = btn.dataset.target;
+      if (!targetId) return;
+      const popup = document.querySelector<HTMLDivElement>(`#${targetId}-calendar`);
+      if (!popup) return;
+      const y = Number(popup.dataset.year);
+      const m = Number(popup.dataset.month);
+      const newM = m === 12 ? 1 : m + 1;
+      const newY = m === 12 ? y + 1 : y;
+      renderCalendarBody(targetId, newY, newM);
+    });
+  });
+
+  // Выбор дня в календаре (обработчик через делегирование)
+  document.querySelectorAll<HTMLDivElement>('.calendar-popup').forEach((popup) => {
+    popup.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      if (!target.classList.contains('cal-day')) return;
+      e.stopPropagation();
+
+      const targetId = target.dataset.target;
+      if (!targetId) return;
+      const day = target.dataset.day;
+      const y = popup.dataset.year;
+      const m = popup.dataset.month;
+      const iso = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+      const textInput = document.querySelector<HTMLInputElement>(`#${targetId}`);
+      if (textInput) {
+        textInput.value = isoToDisplayDate(iso);
+        textInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+
+      popup.style.display = 'none';
+    });
+  });
+
+  // Закрыть календарь при клике вне его
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.calendar-popup').forEach((p) => {
+      (p as HTMLElement).style.display = 'none';
     });
   });
 
