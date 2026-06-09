@@ -51,6 +51,9 @@ const CALL_TYPE_LABELS: Record<string, string> = {
   '4': 'Обратный',
 };
 
+// Кэш пользователей: PORTAL_USER_ID -> имя + фамилия
+let userNameCache: Record<string, string> = {};
+
 function formatDuration(seconds: string): string {
   const sec = parseInt(seconds, 10) || 0;
   const m = Math.floor(sec / 60);
@@ -60,14 +63,19 @@ function formatDuration(seconds: string): string {
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '—';
-  // Формат из voximplant.statistic.get: "2026-06-08 10:30:00" (Europe/Moscow)
-  // Разбираем вручную, чтобы избежать проблем с часовыми поясами
-  const [datePart, timePart] = dateStr.split(' ');
-  if (!datePart) return dateStr;
-  const [y, m, d] = datePart.split('-');
-  const time = timePart || '00:00:00';
-  const [hh, mi] = time.split(':');
-  return `${d}.${m}.${y} ${hh}:${mi}`;
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return dateStr;
+  }
 }
 
 function escapeHtml(value: string): string {
@@ -78,14 +86,53 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '"');
 }
 
-function formatEmployeeName(call: CallRecord): string {
+function getEmployeeName(call: CallRecord): string {
+  // Сначала пробуем из кэша пользователей
+  const cached = userNameCache[call.PORTAL_USER_ID];
+  if (cached) return cached;
+
+  // Если нет в кэше, пробуем поля из ответа API
   const name = (call.USER_NAME || '').trim();
   const lastName = (call.USER_LAST_NAME || '').trim();
   if (name || lastName) {
     return `${name} ${lastName}`.trim();
   }
-  // Если имя не пришло, показываем ID сотрудника
+
+  // Если ничего нет — показываем ID
   return `ID: ${call.PORTAL_USER_ID || '—'}`;
+}
+
+/**
+ * Загружает список пользователей через user.get и заполняет кэш userNameCache.
+ */
+async function loadUserNames(auth: BitrixAuthPayload): Promise<void> {
+  try {
+    const response = await fetch(
+      `https://${auth.domain}/rest/user.get.json?auth=${auth.access_token}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          FILTER: { ACTIVE: true },
+        }),
+      },
+    );
+
+    if (!response.ok) return;
+
+    const data = await response.json();
+    const users: Array<{ ID: string; NAME: string; LAST_NAME: string }> = data.result || [];
+
+    for (const user of users) {
+      const name = (user.NAME || '').trim();
+      const lastName = (user.LAST_NAME || '').trim();
+      if (name || lastName) {
+        userNameCache[user.ID] = `${name} ${lastName}`.trim();
+      }
+    }
+  } catch {
+    // Ошибка загрузки пользователей — не критично, покажем ID
+  }
 }
 
 function renderTable(calls: CallRecord[], params: DetailParams) {
@@ -111,8 +158,7 @@ function renderTable(calls: CallRecord[], params: DetailParams) {
       <td>${escapeHtml(call.PHONE_NUMBER || '—')}</td>
       <td>${CALL_TYPE_LABELS[call.CALL_TYPE] || call.CALL_TYPE}</td>
       <td class="number-col">${formatDuration(call.CALL_DURATION)}</td>
-      <td>${call.CALL_FAILED_CODE === '200' ? '✅ Успешно' : call.CALL_FAILED_CODE ? '❌ Код: ' + escapeHtml(call.CALL_FAILED_CODE) : '—'}</td>
-      <td>${escapeHtml(formatEmployeeName(call))}</td>
+      <td>${escapeHtml(getEmployeeName(call))}</td>
     </tr>
   `).join('');
 
@@ -130,7 +176,6 @@ function renderTable(calls: CallRecord[], params: DetailParams) {
             <col style="width:140px">
             <col style="width:100px">
             <col style="width:80px">
-            <col style="width:100px">
             <col>
           </colgroup>
           <thead>
@@ -139,7 +184,6 @@ function renderTable(calls: CallRecord[], params: DetailParams) {
               <th>Номер телефона</th>
               <th>Тип</th>
               <th class="number-col">Длительность</th>
-              <th>Статус</th>
               <th>Сотрудник</th>
             </tr>
           </thead>
@@ -275,6 +319,10 @@ export async function startDetail() {
 
   try {
     const auth = await getBitrixAuth();
+
+    // Загружаем пользователей для отображения имён
+    await loadUserNames(auth);
+
     const calls = await loadCalls(auth, params);
     app.innerHTML = renderTable(calls, params);
   } catch (err) {
