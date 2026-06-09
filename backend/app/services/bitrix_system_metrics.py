@@ -20,8 +20,25 @@ def collect_bitrix_system_metrics(
 ) -> dict[str, Decimal]:
     period_start, period_end = get_period_bounds(date_from, date_to)
 
+    logger.info(f"=== COLLECT METRICS: user_id={bitrix_user_id}, date_from={date_from}, date_to={date_to} ===")
+    logger.info(f"=== SETTINGS: meeting_entity_type_id={metric_settings.meeting_entity_type_id}, "
+                f"meeting_held_stage_ids={metric_settings.meeting_held_stage_ids}, "
+                f"contract_entity_type_id={metric_settings.contract_entity_type_id}, "
+                f"contract_sent_stage_id={metric_settings.contract_sent_stage_id}, "
+                f"contract_signed_stage_id={metric_settings.contract_signed_stage_id}, "
+                f"invoice_entity_type_id={metric_settings.invoice_entity_type_id}, "
+                f"invoice_sent_stage_id={metric_settings.invoice_sent_stage_id}, "
+                f"invoice_paid_stage_id={metric_settings.invoice_paid_stage_id}, "
+                f"sale_success_stage_id={metric_settings.sale_success_stage_id}, "
+                f"sale_deal_category_id={metric_settings.sale_deal_category_id}, "
+                f"cold_base_deal_category_id={metric_settings.cold_base_deal_category_id} ===")
+
     calls = get_call_rows(client, bitrix_user_id, period_start, period_end)
+    logger.info(f"=== CALLS: {len(calls)} rows ===")
+    
     deals = get_deal_rows(client, bitrix_user_id, period_start, period_end)
+    logger.info(f"=== DEALS: {len(deals)} rows ===")
+    
     meeting_rows = get_smart_process_rows(
         client=client,
         entity_type_id=metric_settings.meeting_entity_type_id,
@@ -29,6 +46,8 @@ def collect_bitrix_system_metrics(
         period_start=period_start,
         period_end=period_end,
     )
+    logger.info(f"=== MEETING ROWS (created): {len(meeting_rows)} rows ===")
+    
     held_meeting_ids = get_stage_owner_ids_for_user(
         client=client,
         entity_type_id=metric_settings.meeting_entity_type_id,
@@ -90,6 +109,12 @@ def collect_bitrix_system_metrics(
         owner_ids=paid_invoice_ids,
         bitrix_user_id=None,
     )
+
+    logger.info(f"=== RESULTS: meetings_held={len(held_meeting_ids)}, meetings_created={len(meeting_rows)}, "
+                f"calls={len(calls)}, deals={len(deals)}, "
+                f"contracts_sent={len(sent_contract_ids)}, contracts_signed={len(signed_contract_ids)}, "
+                f"invoices_sent={len(sent_invoice_ids)}, invoices_paid={len(paid_invoice_ids)}, "
+                f"successful_deals={len(successful_deal_ids)}, paid_invoice_sum={sum_money(paid_invoice_rows)} ===")
 
     return {
         "meetings_held": Decimal(len(held_meeting_ids)),
