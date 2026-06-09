@@ -52,6 +52,7 @@ def collect_bitrix_system_metrics(
         bitrix_user_id=bitrix_user_id,
         period_start=period_start,
         period_end=period_end,
+        skip_assigned_filter=True,
     )
     sent_invoice_ids = get_stage_owner_ids_for_user(
         client=client,
@@ -68,6 +69,7 @@ def collect_bitrix_system_metrics(
         bitrix_user_id=bitrix_user_id,
         period_start=period_start,
         period_end=period_end,
+        skip_assigned_filter=True,
     )
     successful_deal_ids = get_stage_owner_ids_for_user(
         client=client,
@@ -77,12 +79,16 @@ def collect_bitrix_system_metrics(
         period_start=period_start,
         period_end=period_end,
         category_id=metric_settings.sale_deal_category_id,
+        skip_assigned_filter=True,
     )
+    # Для суммы оплаченных счетов тоже не фильтруем по assignedById —
+    # счёт мог быть переназначен после оплаты, но оплата была совершена
+    # в отчётном периоде именно этим сотрудником.
     paid_invoice_rows = get_items_by_ids(
         client=client,
         entity_type_id=metric_settings.invoice_entity_type_id,
         owner_ids=paid_invoice_ids,
-        bitrix_user_id=bitrix_user_id,
+        bitrix_user_id=None,
     )
 
     return {
@@ -234,7 +240,16 @@ def get_stage_owner_ids_for_user(
     period_start: datetime,
     period_end: datetime,
     category_id: int | None = None,
+    *,
+    skip_assigned_filter: bool = False,
 ) -> set[int]:
+    """Получает ID элементов, которые перешли в указанные стадии в заданном периоде.
+
+    Если skip_assigned_filter=True, не фильтрует по текущему assignedById —
+    используются только данные из stage history. Это нужно для терминальных
+    стадий (подписан, оплачен, успешная сделка), где элемент мог быть
+    переназначен другому сотруднику после перехода в эту стадию.
+    """
     if entity_type_id is None or not stage_ids:
         return set()
 
@@ -252,6 +267,16 @@ def get_stage_owner_ids_for_user(
     }
     if not owner_ids:
         return set()
+
+    if skip_assigned_filter:
+        # Для терминальных стадий не фильтруем по assignedById —
+        # элемент мог быть переназначен после перехода в эту стадию.
+        # Стадия истории уже гарантирует, что переход был в нужном периоде.
+        logger.info(
+            f"=== STAGE HISTORY (skip_assigned): entityTypeId={entity_type_id}, "
+            f"owner_ids={owner_ids}, count={len(owner_ids)} ==="
+        )
+        return owner_ids
 
     logger.info(f"=== GET_ITEMS: entityTypeId={entity_type_id}, owner_ids={owner_ids}, bitrix_user_id={bitrix_user_id}, category_id={category_id} ===")
     assigned_rows = get_items_by_ids(
@@ -274,9 +299,15 @@ def get_items_by_ids(
     client: BitrixRestClient,
     entity_type_id: int,
     owner_ids: set[int],
-    bitrix_user_id: int,
+    bitrix_user_id: int | None,
     category_id: int | None = None,
 ) -> list[dict[str, Any]]:
+    """Получает элементы по их ID.
+
+    Если bitrix_user_id=None, не фильтрует по assignedById.
+    Это нужно для терминальных стадий, где элемент мог быть
+    переназначен другому сотруднику после перехода в стадию.
+    """
     rows: list[dict[str, Any]] = []
     ids = list(owner_ids)
 
@@ -284,8 +315,9 @@ def get_items_by_ids(
         chunk = ids[start : start + 50]
         item_filter: dict[str, Any] = {
             "@id": chunk,
-            "assignedById": bitrix_user_id,
         }
+        if bitrix_user_id is not None:
+            item_filter["assignedById"] = bitrix_user_id
         if category_id is not None:
             item_filter["categoryId"] = category_id
 
