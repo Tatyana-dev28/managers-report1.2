@@ -41,7 +41,9 @@ function buildCallGridFilterUrl(
 ): string | null {
   if (!CALL_METRIC_CODES.has(metricCode)) return null;
 
-  const filterFields: Record<string, string | number> = {
+  // Формируем объект фильтра для grid_filter_fields
+  // Коды полей — системные имена для /telephony/detail.php
+  const filterData: Record<string, string | number> = {
     PORTAL_USER_ID: userId,
     CALL_START_DATE_from: dateFrom,
     CALL_START_DATE_to: dateTo,
@@ -50,23 +52,22 @@ function buildCallGridFilterUrl(
   // Добавляем специфичные фильтры в зависимости от метрики
   switch (metricCode) {
     case 'outgoing_calls':
-      filterFields.CALL_TYPE = '1';
+      filterData.CALL_TYPE = 1;
       break;
     case 'successful_outgoing_calls':
-      filterFields.CALL_TYPE = '1';
-      filterFields.CALL_FAILED_CODE = '200';
+      filterData.CALL_TYPE = 1;
+      filterData.STATUS_SUCCESSFUL = 'Y';
       break;
     case 'incoming_calls':
-      // Входящие: CALL_TYPE=2 (входящий) или 3 (пропущенный входящий)
-      // Grid-фильтр не поддерживает множественные значения через запятую,
-      // поэтому не фильтруем по CALL_TYPE для входящих — покажем все,
-      // пользователь сможет уточнить вручную
+      // Входящие: CALL_TYPE=2 (входящий) или 3 (входящий с перенаправлением)
+      // Не фильтруем — покажем все звонки, пользователь уточнит вручную
       break;
     // calls_total — без дополнительных фильтров, все звонки
   }
 
-  const filterString = btoa(JSON.stringify(filterFields));
-  return `/report/telephony/?grid_filter_id=telephony_detail&grid_filter_fields=${encodeURIComponent(filterString)}`;
+  // Кодируем в Base64 и формируем URL
+  const base64Filter = btoa(JSON.stringify(filterData));
+  return `/telephony/detail.php?grid_filter_id=CRM_TELEPHONY_REPORT_GRID&grid_filter_fields=${encodeURIComponent(base64Filter)}`;
 }
 
 type DateFilterValue =
