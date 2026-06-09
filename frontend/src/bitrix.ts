@@ -7,6 +7,7 @@ declare global {
       getAuth: () => { domain: string; access_token: string; [key: string]: any } | null;
       openPath: (path: string, callback?: (result?: unknown) => void) => void;
       openApplication?: (params: Record<string, unknown>, callback?: (result?: unknown) => void) => void;
+      closeApplication?: (callback?: (result?: unknown) => void) => void;
       placement?: {
         info: () => { options?: Record<string, unknown> };
       };

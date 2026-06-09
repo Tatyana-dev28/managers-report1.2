@@ -625,7 +625,9 @@ select:focus {
 }
 
 .table-wrap {
-  border-top: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 table {
@@ -812,4 +814,78 @@ tbody tr:last-child td {
   text-align: center;
   color: var(--muted);
   font-size: 14px;
+}
+
+.detail-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--primary);
+  background: none;
+  border: 1px solid var(--primary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.detail-back-btn:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* --- Drag & drop колонок --- */
+
+.detail-table th {
+  position: relative;
+  cursor: grab;
+  user-select: none;
+  /* Вертикальный разделитель между колонками */
+  border-right: 1px solid var(--line);
+}
+
+.detail-table th:last-child {
+  border-right: none;
+}
+
+.detail-table th.dragging {
+  opacity: 0.5;
+}
+
+.detail-table th.drag-over-left {
+  border-left: 2px solid var(--primary);
+}
+
+.detail-table th.drag-over-right {
+  border-right: 2px solid var(--primary);
+}
+
+/* --- Resizer для изменения ширины колонок --- */
+
+.col-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+}
+
+.col-resizer:hover {
+  background: var(--primary);
+  opacity: 0.4;
+}
+
+/* Ячейки таблицы детализации — разделители */
+.detail-table td {
+  border-right: 1px solid var(--line);
+}
+
+.detail-table td:last-child {
+  border-right: none;
 }
