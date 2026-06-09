@@ -842,7 +842,7 @@ tbody tr:last-child td {
 
 .detail-table th,
 .detail-table td {
-  padding: 4px 6px;
+  padding: 3px 4px;
 }
 
 .detail-table th {
@@ -860,7 +860,7 @@ tbody tr:last-child td {
 @media (max-width: 600px) {
   .detail-table th,
   .detail-table td {
-    padding: 3px 4px;
+    padding: 2px 3px;
     font-size: 12px;
   }
 }

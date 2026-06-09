@@ -18,9 +18,15 @@ export type ColumnDef = {
   /** Ширина в процентах */
   defaultWidth: number;
   /** Функция форматирования значения */
-  render: (columns: Record<string, unknown>) => string;
+  render: (columns: Record<string, unknown>, row?: MetricDetailRow) => string;
   /** CSS-класс для th/td */
   className?: string;
+};
+
+/** Внутренний тип строки детализации (для render) */
+export type MetricDetailRow = {
+  columns: Record<string, unknown>;
+  employee_name?: string;
 };
 
 export type MetricDetailConfig = {
@@ -94,8 +100,17 @@ const CALL_TYPE_LABELS: Record<string, string> = {
   '4': 'Обратный',
 };
 
+/** Колонка сотрудника (первая во всех таблицах) */
+const EMPLOYEE_COLUMN: ColumnDef = {
+  key: 'employee_name',
+  title: 'Сотрудник',
+  defaultWidth: 18,
+  render: (_col, row) => escapeHtml(row?.employee_name || '—'),
+};
+
 /** Колонки для звонков (общие для всех 4 метрик звонков) */
 const CALL_COLUMNS: ColumnDef[] = [
+  EMPLOYEE_COLUMN,
   {
     key: 'PHONE_NUMBER',
     title: 'Номер телефона',
@@ -135,6 +150,7 @@ const CALL_COLUMNS: ColumnDef[] = [
 
 /** Колонки для Смарт-процессов (встречи, договоры, счета) */
 const SMART_PROCESS_COLUMNS: ColumnDef[] = [
+  EMPLOYEE_COLUMN,
   {
     key: 'title',
     title: 'Название',
@@ -167,6 +183,7 @@ const SMART_PROCESS_COLUMNS: ColumnDef[] = [
 
 /** Колонки для сделок */
 const DEAL_COLUMNS: ColumnDef[] = [
+  EMPLOYEE_COLUMN,
   {
     key: 'title',
     title: 'Название сделки',
@@ -270,11 +287,6 @@ export const METRIC_DETAIL_CONFIGS: Record<string, MetricDetailConfig> = {
   invoices_paid: {
     metricCode: 'invoices_paid',
     defaultTitle: 'Оплаченные счета',
-    columns: SMART_PROCESS_COLUMNS,
-  },
-  paid_invoice_sum: {
-    metricCode: 'paid_invoice_sum',
-    defaultTitle: 'Сумма оплаченных счетов',
     columns: SMART_PROCESS_COLUMNS,
   },
 };

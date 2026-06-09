@@ -193,6 +193,19 @@ def get_metric_detail(
             metric_title = m.title
             break
 
+    # Получаем имя сотрудника
+    employee_name = ""
+    try:
+        user_resp = client.call("user.get", {"ID": str(employee_id)})
+        users = user_resp.get("result", [])
+        if users:
+            u = users[0]
+            first = u.get("NAME", "") or ""
+            last = u.get("LAST_NAME", "") or ""
+            employee_name = f"{first} {last}".strip()
+    except Exception:
+        pass
+
     rows = _get_detail_rows(
         bitrix_user_id=employee_id,
         metric_code=metric_code,
@@ -205,7 +218,7 @@ def get_metric_detail(
     return BitrixMetricDetailRead(
         metric_code=metric_code,
         metric_title=metric_title,
-        rows=[BitrixMetricDetailRow(columns=row) for row in rows],
+        rows=[BitrixMetricDetailRow(columns=row, employee_name=employee_name) for row in rows],
     )
 
 

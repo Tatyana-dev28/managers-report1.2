@@ -118,6 +118,7 @@ class BitrixMetricDetailRequest(BaseModel):
 class BitrixMetricDetailRow(BaseModel):
     """Одна строка детализации. Поля — сырые данные из API Битрикс24."""
     columns: dict[str, Any]
+    employee_name: str = ""
 
 
 class BitrixMetricDetailRead(BaseModel):

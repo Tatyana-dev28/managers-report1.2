@@ -127,6 +127,7 @@ export function getSystemReport(payload: {
 
 export type MetricDetailRow = {
   columns: Record<string, unknown>;
+  employee_name?: string;
 };
 
 export type MetricDetailResponse = {

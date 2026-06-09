@@ -79,7 +79,7 @@ function renderTable(data: MetricDetailResponse, params: DetailParams) {
       const cellsHtml = columns
         .map((col) => {
           const className = col.className ? ` class="${col.className}"` : '';
-          return `<td${className}>${col.render(row.columns)}</td>`;
+          return `<td${className}>${col.render(row.columns, row)}</td>`;
         })
         .join('');
       return `<tr>${cellsHtml}</tr>`;
