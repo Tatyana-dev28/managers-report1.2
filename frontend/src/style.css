@@ -837,55 +837,58 @@ tbody tr:last-child td {
   color: #fff;
 }
 
-/* --- Drag & drop колонок --- */
+/* --- Drag & drop колонок (без визуальных индикаторов) --- */
 
 .detail-table th {
   position: relative;
   cursor: grab;
   user-select: none;
-  /* Вертикальный разделитель между колонками */
-  border-right: 1px solid var(--line);
-}
-
-.detail-table th:last-child {
-  border-right: none;
 }
 
 .detail-table th.dragging {
   opacity: 0.5;
 }
 
-.detail-table th.drag-over-left {
-  border-left: 2px solid var(--primary);
-}
+/* --- Resizer для изменения ширины колонок (как в эталонном проекте) --- */
 
-.detail-table th.drag-over-right {
-  border-right: 2px solid var(--primary);
-}
-
-/* --- Resizer для изменения ширины колонок --- */
-
-.col-resizer {
+.column-resizer {
   position: absolute;
-  top: 0;
-  right: -3px;
-  width: 6px;
-  height: 100%;
+  top: 4px;
+  right: -5px;
+  width: 10px;
+  min-width: 10px;
+  height: calc(100% - 8px);
+  border: 0;
+  border-radius: 8px;
+  background:
+    linear-gradient(#9aa4b2, #9aa4b2) center / 2px 13px no-repeat,
+    linear-gradient(#cfd6e2, #cfd6e2) calc(50% + 3px) center / 1px 13px no-repeat;
   cursor: col-resize;
+  padding: 0;
+  opacity: 0.75;
   z-index: 10;
-  background: transparent;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
 }
 
-.col-resizer:hover {
-  background: var(--primary);
-  opacity: 0.4;
+.column-resizer:hover,
+.column-resizer:focus-visible,
+.is-resizing-column .column-resizer {
+  background-color: #e8edf4;
+  opacity: 1;
 }
 
-/* Ячейки таблицы детализации — разделители */
-.detail-table td {
-  border-right: 1px solid var(--line);
+.is-resizing-column {
+  cursor: col-resize;
+  user-select: none;
 }
 
-.detail-table td:last-child {
-  border-right: none;
+/* Разделитель между заголовками колонок — тонкая линия */
+.detail-table thead th:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 0;
+  width: 1px;
+  height: calc(100% - 12px);
+  background: var(--line);
 }
