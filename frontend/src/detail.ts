@@ -33,6 +33,7 @@ type DetailParams = {
   date_from: string;
   date_to: string;
   metric: string;
+  metric_title?: string;
 };
 
 // Соответствие кодов метрик человекочитаемым названиям
@@ -69,31 +70,31 @@ const COLUMNS: ColumnDef[] = [
   {
     key: 'employee',
     title: 'Сотрудник',
-    defaultWidth: 25,
+    defaultWidth: 22,
     render: (call) => escapeHtml(getEmployeeName(call)),
   },
   {
     key: 'phone',
     title: 'Номер телефона',
-    defaultWidth: 20,
+    defaultWidth: 18,
     render: (call) => escapeHtml(call.PHONE_NUMBER || '—'),
   },
   {
     key: 'type',
     title: 'Тип звонка',
-    defaultWidth: 16,
+    defaultWidth: 14,
     render: (call) => CALL_TYPE_LABELS[call.CALL_TYPE] || call.CALL_TYPE,
   },
   {
     key: 'date',
     title: 'Дата и время',
-    defaultWidth: 22,
+    defaultWidth: 28,
     render: (call) => formatDate(call.CALL_START_DATE),
   },
   {
     key: 'duration',
     title: 'Длительность',
-    defaultWidth: 17,
+    defaultWidth: 18,
     className: 'number-col',
     render: (call) => formatDuration(call.CALL_DURATION),
   },
@@ -194,7 +195,7 @@ async function loadUserNames(auth: BitrixAuthPayload): Promise<void> {
 // --- Рендеринг ---
 
 function renderTable(calls: CallRecord[], params: DetailParams) {
-  const label = METRIC_LABELS[params.metric] || 'Детализация звонков';
+  const label = params.metric_title || METRIC_LABELS[params.metric] || 'Детализация звонков';
 
   const backButton = '<button class="detail-back-btn" onclick="closeDetail()">← Назад</button>';
 
@@ -396,6 +397,7 @@ export async function startDetail() {
         date_from: urlParams.get('date_from') || '',
         date_to: urlParams.get('date_to') || '',
         metric: urlParams.get('metric') || 'calls_total',
+        metric_title: urlParams.get('metric_title') || undefined,
       };
     }
   }

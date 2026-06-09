@@ -38,6 +38,7 @@ function openCallDetail(
   userId: number,
   dateFrom: string,
   dateTo: string,
+  metricTitle?: string,
 ): void {
   if (!CALL_METRIC_CODES.has(metricCode)) return;
 
@@ -47,6 +48,9 @@ function openCallDetail(
     date_to: dateTo,
     metric: metricCode,
   };
+  if (metricTitle) {
+    params.metric_title = metricTitle;
+  }
 
   console.log('[CallDetail] Opening with params:', params);
 
@@ -426,7 +430,7 @@ function renderEmployeeMetrics(employee: EmployeeSystemReport) {
             const isCallMetric = CALL_METRIC_CODES.has(metric.metric_code);
             const formattedValue = formatValue(metric.system_value, metric.is_money);
             const valueHtml = isCallMetric
-              ? `<a class="metric-link" href="#" data-metric="${escapeHtml(metric.metric_code)}" data-user="${employee.bitrix_user_id}" data-from="${escapeHtml(state.dateFrom)}" data-to="${escapeHtml(state.dateTo)}">${formattedValue}</a>`
+              ? `<a class="metric-link" href="#" data-metric="${escapeHtml(metric.metric_code)}" data-title="${escapeHtml(metric.metric_title)}" data-user="${employee.bitrix_user_id}" data-from="${escapeHtml(state.dateFrom)}" data-to="${escapeHtml(state.dateTo)}">${formattedValue}</a>`
               : formattedValue;
             return `
             <tr>
@@ -677,13 +681,14 @@ function bindEvents() {
       const userId = link.dataset.user;
       const dateFrom = link.dataset.from;
       const dateTo = link.dataset.to;
+      const metricTitle = link.dataset.title;
 
       if (!metricCode || !userId || !dateFrom || !dateTo) {
         console.warn('[MetricLink] Missing data attributes');
         return;
       }
 
-      openCallDetail(metricCode, parseInt(userId, 10), dateFrom, dateTo);
+      openCallDetail(metricCode, parseInt(userId, 10), dateFrom, dateTo, metricTitle);
     });
   });
 }
