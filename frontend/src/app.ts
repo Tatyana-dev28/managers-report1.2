@@ -43,6 +43,8 @@ type AppState = {
   error: string | null;
   statusMessage: string;
   metricSettings: MetricSettings | null;
+  employeeSearch: string;
+  employeeFilterOpen: boolean;
 };
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -78,6 +80,8 @@ const state: AppState = {
   error: null,
   statusMessage: 'Инициализация приложения...',
   metricSettings: null,
+  employeeSearch: '',
+  employeeFilterOpen: false,
 };
 
 export async function startApp() {
@@ -202,21 +206,35 @@ function renderDateFilter() {
 
 function renderEmployeeFilter() {
   const selectedCount = state.selectedUserIds.length;
+  const query = state.employeeSearch.toLowerCase().trim();
+  const filteredUsers = query
+    ? state.users.filter((user) => user.full_name.toLowerCase().includes(query))
+    : state.users;
 
   return `
     <div class="employee-filter">
       <label class="field-title">Сотрудники</label>
-      <details class="employee-filter-details">
+      <details class="employee-filter-details" ${state.employeeFilterOpen ? 'open' : ''}>
         <summary>${selectedCount ? `Выбрано: ${selectedCount}` : 'Выберите сотрудников'}</summary>
         <div class="employee-filter-menu">
           <div class="employee-filter-actions">
             <button id="select-all-users" class="text-button" type="button">Выбрать всех</button>
             <button id="clear-users" class="text-button" type="button">Снять выбор</button>
           </div>
+          <div class="employee-filter-search">
+            <input
+              id="employee-search-input"
+              class="employee-search-input"
+              type="text"
+              placeholder="Поиск сотрудников..."
+              value="${escapeHtml(state.employeeSearch)}"
+              autocomplete="off"
+            >
+          </div>
           <div class="employee-options">
-            ${state.users.length
-              ? state.users.map(renderEmployeeOption).join('')
-              : '<div class="empty compact-empty">Сотрудники пока не загружены.</div>'}
+            ${filteredUsers.length
+              ? filteredUsers.map(renderEmployeeOption).join('')
+              : '<div class="empty compact-empty">Сотрудники не найдены.</div>'}
           </div>
         </div>
       </details>
@@ -392,9 +410,15 @@ function bindEvents() {
     const details = event.currentTarget;
     if (!(details instanceof HTMLDetailsElement)) return;
     
+    state.employeeFilterOpen = details.open;
+    
     if (details.open) {
       // Если открываем сотрудников — закрываем фильтр даты
       closeDateDropdown();
+      // Фокусируемся на строке поиска
+      setTimeout(() => {
+        document.querySelector<HTMLInputElement>('#employee-search-input')?.focus();
+      }, 0);
     }
   });
 
@@ -443,6 +467,14 @@ function bindEvents() {
     state.selectedUserIds = [];
     state.openedUserIds = [];
     state.report = null;
+    render();
+  });
+
+  // Поиск сотрудников
+  document.querySelector<HTMLInputElement>('#employee-search-input')?.addEventListener('input', (event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    state.employeeSearch = input.value;
+    state.employeeFilterOpen = true;
     render();
   });
 
