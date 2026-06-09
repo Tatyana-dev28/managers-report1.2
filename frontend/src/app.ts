@@ -239,8 +239,8 @@ function renderDateInput(id: string, isoValue: string) {
   return `
     <div class="date-input-wrap">
       <input id="${id}" class="date-text-input" type="text" inputmode="numeric" value="${isoToDisplayDate(isoValue)}">
-      <input id="${id}-native" class="native-date-input" type="date" value="${isoValue}" tabindex="-1" aria-hidden="true">
       <button type="button" class="calendar-button" data-target="${id}" aria-label="Открыть календарь">▦</button>
+      <input id="${id}-native" class="native-date-input" type="date" value="${isoValue}" tabindex="-1" aria-hidden="true">
     </div>
   `;
 }
@@ -400,21 +400,10 @@ function bindEvents() {
     render();
   });
 
-  document.querySelectorAll<HTMLButtonElement>('.calendar-button').forEach((button) => {
-    button.addEventListener('click', () => {
-      const targetId = button.dataset.target;
-      if (!targetId) return;
-
-      const nativeInput = document.querySelector<HTMLInputElement>(`#${targetId}-native`);
-      if (!nativeInput) return;
-
-      if (typeof nativeInput.showPicker === 'function') {
-        nativeInput.showPicker();
-      } else {
-        nativeInput.click();
-      }
-    });
-  });
+  // Календарь теперь работает через CSS: .native-date-input накладывается
+  // поверх всего .date-input-wrap (position: absolute; inset: 0; opacity: 0).
+  // Клик по кнопке или по области календаря попадает в прозрачный input.
+  // Обработчик не нужен, но оставляем для обратной совместимости.
 
   document.querySelectorAll<HTMLInputElement>('.native-date-input').forEach((input) => {
     input.addEventListener('change', () => {
