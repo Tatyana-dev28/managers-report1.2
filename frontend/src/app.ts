@@ -15,7 +15,7 @@ import type {
 } from './types';
 import logoUrl from './assets/sapp-logo.svg';
 
-// Коды метрик звонков, для которых работает детализация
+// Коды метрик звонков, для которых открывается детализация
 const CALL_METRIC_CODES = new Set([
   'calls_total',
   'outgoing_calls',
@@ -24,60 +24,41 @@ const CALL_METRIC_CODES = new Set([
 ]);
 
 /**
- * Формирует URL для открытия страницы детализации звонков Битрикс24
- * с предустановленным фильтром через fields[...] параметры.
+ * Открывает слайдер детализации звонков через BX24.openApplication().
+ * Внутри слайдера загружается то же приложение, но с параметрами,
+ * по которым main.ts определяет, что нужно показать страницу детализации.
  *
  * @param metricCode - код метрики (calls_total, outgoing_calls, etc.)
  * @param userId - ID сотрудника в Битрикс24
  * @param dateFrom - дата начала периода (ISO, YYYY-MM-DD)
  * @param dateTo - дата окончания периода (ISO, YYYY-MM-DD)
- * @returns URL для BX24.openPath() или null, если метрика не звонковая
  */
-function buildCallGridFilterUrl(
+function openCallDetail(
   metricCode: string,
   userId: number,
   dateFrom: string,
   dateTo: string,
-): string | null {
-  if (!CALL_METRIC_CODES.has(metricCode)) return null;
+): void {
+  if (!CALL_METRIC_CODES.has(metricCode)) return;
 
-  // Форматируем даты в формат Битрикс24 (ДД.ММ.ГГГГ)
-  const fmtDate = (iso: string) => {
-    const [y, m, d] = iso.split('-');
-    return `${d}.${m}.${y}`;
+  const params: Record<string, string> = {
+    employee_id: String(userId),
+    date_from: dateFrom,
+    date_to: dateTo,
+    metric: metricCode,
   };
 
-  const params = new URLSearchParams();
+  console.log('[CallDetail] Opening with params:', params);
 
-  // Идентификатор фильтра для грида детализации звонков
-  params.set('f_id', 'report_telephony_detail_grid');
-
-  // Фильтр по сотруднику
-  params.set('fields[PORTAL_USER_ID]', String(userId));
-
-  // Фильтр по дате (диапазон)
-  params.set('fields[CALL_START_DATE_datesel]', 'RANGE');
-  params.set('fields[CALL_START_DATE_from]', fmtDate(dateFrom));
-  params.set('fields[CALL_START_DATE_to]', fmtDate(dateTo));
-
-  // Добавляем специфичные фильтры в зависимости от метрики
-  switch (metricCode) {
-    case 'outgoing_calls':
-      // Исходящие: CALL_TYPE=2 в документации (Outgoing)
-      params.set('fields[CALL_TYPE]', '2');
-      break;
-    case 'successful_outgoing_calls':
-      params.set('fields[CALL_TYPE]', '2');
-      // Успешные: код ответа 200
-      params.set('fields[CALL_FAILED_CODE]', '200');
-      break;
-    case 'incoming_calls':
-      // Входящие: без доп. фильтра — покажем все звонки
-      break;
-    // calls_total — без дополнительных фильтров, все звонки
+  if (window.BX24?.openApplication) {
+    window.BX24.openApplication(params, function(result?: unknown) {
+      console.log('[CallDetail] Slider closed, result:', result);
+    });
+  } else {
+    // Fallback: открываем в новом окне (для локальной разработки)
+    const urlParams = new URLSearchParams(params);
+    window.open(`/index.html?${urlParams.toString()}`, '_blank');
   }
-
-  return `/telephony/detail.php?${params.toString()}`;
 }
 
 type DateFilterValue =
@@ -442,15 +423,10 @@ function renderEmployeeMetrics(employee: EmployeeSystemReport) {
         </thead>
         <tbody>
           ${employee.metrics.map((metric) => {
-            const url = buildCallGridFilterUrl(
-              metric.metric_code,
-              employee.bitrix_user_id,
-              state.dateFrom,
-              state.dateTo,
-            );
+            const isCallMetric = CALL_METRIC_CODES.has(metric.metric_code);
             const formattedValue = formatValue(metric.system_value, metric.is_money);
-            const valueHtml = url
-              ? `<a class="metric-link" href="${url}" data-bitrix-path="${escapeHtml(url)}">${formattedValue}</a>`
+            const valueHtml = isCallMetric
+              ? `<a class="metric-link" href="#" data-metric="${escapeHtml(metric.metric_code)}" data-user="${employee.bitrix_user_id}" data-from="${escapeHtml(state.dateFrom)}" data-to="${escapeHtml(state.dateTo)}">${formattedValue}</a>`
               : formattedValue;
             return `
             <tr>
@@ -692,25 +668,22 @@ function bindEvents() {
     });
   });
 
-  // Открытие детализации звонков в Битрикс24
+  // Открытие детализации звонков через BX24.openApplication()
   document.querySelectorAll<HTMLAnchorElement>('.metric-link').forEach((link) => {
     link.addEventListener('click', (event) => {
-      const path = link.dataset.bitrixPath;
-      if (!path) return;
-
       event.preventDefault();
-      console.log('[MetricLink] Navigating to:', path);
 
-      // Пробуем BX24.openPath с колбэком (навигация внутри портала)
-      if (window.BX24?.openPath) {
-        window.BX24.openPath(path, function(result?: unknown) {
-          console.log('[MetricLink] Slider opened, result:', result);
-        });
+      const metricCode = link.dataset.metric;
+      const userId = link.dataset.user;
+      const dateFrom = link.dataset.from;
+      const dateTo = link.dataset.to;
+
+      if (!metricCode || !userId || !dateFrom || !dateTo) {
+        console.warn('[MetricLink] Missing data attributes');
         return;
       }
 
-      // Fallback: если BX24 нет, просто переходим по ссылке
-      window.location.href = path;
+      openCallDetail(metricCode, parseInt(userId, 10), dateFrom, dateTo);
     });
   });
 }
