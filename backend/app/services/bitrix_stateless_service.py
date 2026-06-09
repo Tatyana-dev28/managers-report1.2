@@ -10,11 +10,14 @@ from app.integrations.bitrix import BitrixRestClient
 from app.schemas.bitrix_stateless import (
     BitrixAuthPayload,
     BitrixEmployeeSystemReportRead,
+    BitrixMetricDetailRead,
+    BitrixMetricDetailRow,
     BitrixMetricSettings,
     BitrixSystemMetricRead,
     BitrixSystemReportRead,
     BitrixUserRead,
 )
+from app.services.bitrix_metric_detail_service import get_metric_detail as _get_detail_rows
 from app.services.bitrix_system_metrics import collect_bitrix_system_metrics
 from app.services.bitrix_metric_sources_service import detect_metric_sources
 
@@ -165,6 +168,44 @@ def build_system_report(
         date_from=date_from,
         date_to=date_to,
         employees=employees,
+    )
+
+
+def get_metric_detail(
+    auth: BitrixAuthPayload,
+    metric_code: str,
+    employee_id: int,
+    date_from: date,
+    date_to: date,
+    metric_settings: BitrixMetricSettings | None = None,
+) -> BitrixMetricDetailRead:
+    """Возвращает детализацию для указанной метрики."""
+    client = build_client(auth)
+
+    if metric_settings is None:
+        detected = detect_metric_sources(client)
+        metric_settings = convert_detected_to_settings(detected)
+
+    # Находим название метрики
+    metric_title = metric_code
+    for m in METRICS:
+        if m.code == metric_code:
+            metric_title = m.title
+            break
+
+    rows = _get_detail_rows(
+        bitrix_user_id=employee_id,
+        metric_code=metric_code,
+        date_from=date_from,
+        date_to=date_to,
+        client=client,
+        metric_settings=metric_settings,
+    )
+
+    return BitrixMetricDetailRead(
+        metric_code=metric_code,
+        metric_title=metric_title,
+        rows=[BitrixMetricDetailRow(columns=row) for row in rows],
     )
 
 

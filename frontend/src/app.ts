@@ -13,34 +13,27 @@ import type {
   MetricSettings,
   SystemReport,
 } from './types';
+import { hasMetricDetail } from './detail-config';
 import logoUrl from './assets/sapp-logo.svg';
 
-// Коды метрик звонков, для которых открывается детализация
-const CALL_METRIC_CODES = new Set([
-  'calls_total',
-  'outgoing_calls',
-  'successful_outgoing_calls',
-  'incoming_calls',
-]);
-
 /**
- * Открывает слайдер детализации звонков через BX24.openApplication().
+ * Открывает слайдер детализации метрики через BX24.openApplication().
  * Внутри слайдера загружается то же приложение, но с параметрами,
  * по которым main.ts определяет, что нужно показать страницу детализации.
  *
- * @param metricCode - код метрики (calls_total, outgoing_calls, etc.)
+ * @param metricCode - код метрики
  * @param userId - ID сотрудника в Битрикс24
  * @param dateFrom - дата начала периода (ISO, YYYY-MM-DD)
  * @param dateTo - дата окончания периода (ISO, YYYY-MM-DD)
  */
-function openCallDetail(
+function openMetricDetail(
   metricCode: string,
   userId: number,
   dateFrom: string,
   dateTo: string,
   metricTitle?: string,
 ): void {
-  if (!CALL_METRIC_CODES.has(metricCode)) return;
+  if (!hasMetricDetail(metricCode)) return;
 
   const params: Record<string, string> = {
     employee_id: String(userId),
@@ -52,11 +45,11 @@ function openCallDetail(
     params.metric_title = metricTitle;
   }
 
-  console.log('[CallDetail] Opening with params:', params);
+  console.log('[MetricDetail] Opening with params:', params);
 
   if (window.BX24?.openApplication) {
     window.BX24.openApplication(params, function(result?: unknown) {
-      console.log('[CallDetail] Slider closed, result:', result);
+      console.log('[MetricDetail] Slider closed, result:', result);
     });
   } else {
     // Fallback: открываем в новом окне (для локальной разработки)
@@ -380,7 +373,7 @@ function renderReportContent() {
   }
 
   if (!state.selectedUserIds.length) {
-    return '<div class="empty">Выберите одного или нескольких сотрудников и нажмите “Показать отчет”.</div>';
+    return '<div class="empty">Выберите одного или нескольких сотрудников и нажмите "Показать отчет".</div>';
   }
 
   if (!state.report) {
@@ -427,9 +420,9 @@ function renderEmployeeMetrics(employee: EmployeeSystemReport) {
         </thead>
         <tbody>
           ${employee.metrics.map((metric) => {
-            const isCallMetric = CALL_METRIC_CODES.has(metric.metric_code);
+            const isDetailAvailable = hasMetricDetail(metric.metric_code);
             const formattedValue = formatValue(metric.system_value, metric.is_money);
-            const valueHtml = isCallMetric
+            const valueHtml = isDetailAvailable
               ? `<a class="metric-link" href="#" data-metric="${escapeHtml(metric.metric_code)}" data-title="${escapeHtml(metric.metric_title)}" data-user="${employee.bitrix_user_id}" data-from="${escapeHtml(state.dateFrom)}" data-to="${escapeHtml(state.dateTo)}">${formattedValue}</a>`
               : formattedValue;
             return `
@@ -672,7 +665,7 @@ function bindEvents() {
     });
   });
 
-  // Открытие детализации звонков через BX24.openApplication()
+  // Открытие детализации метрики через BX24.openApplication()
   document.querySelectorAll<HTMLAnchorElement>('.metric-link').forEach((link) => {
     link.addEventListener('click', (event) => {
       event.preventDefault();
@@ -688,7 +681,7 @@ function bindEvents() {
         return;
       }
 
-      openCallDetail(metricCode, parseInt(userId, 10), dateFrom, dateTo, metricTitle);
+      openMetricDetail(metricCode, parseInt(userId, 10), dateFrom, dateTo, metricTitle);
     });
   });
 }
@@ -875,9 +868,9 @@ function formatValue(value: string, isMoney: boolean) {
 
 function escapeHtml(value: string) {
   return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
+    .replaceAll('&', '&')
+    .replaceAll('<', '<')
+    .replaceAll('>', '>')
+    .replaceAll('"', '"')
     .replaceAll("'", '&#039;');
 }

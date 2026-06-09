@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -100,3 +101,26 @@ class BitrixStagesRequest(BaseModel):
     auth: BitrixAuthPayload
     entity_type_id: int
     category_id: int = 0
+
+
+# --- Детализация метрик ---
+
+
+class BitrixMetricDetailRequest(BaseModel):
+    auth: BitrixAuthPayload
+    metric_code: str
+    employee_id: int
+    date_from: date
+    date_to: date
+    settings: BitrixMetricSettings | None = None
+
+
+class BitrixMetricDetailRow(BaseModel):
+    """Одна строка детализации. Поля — сырые данные из API Битрикс24."""
+    columns: dict[str, Any]
+
+
+class BitrixMetricDetailRead(BaseModel):
+    metric_code: str
+    metric_title: str
+    rows: list[BitrixMetricDetailRow]

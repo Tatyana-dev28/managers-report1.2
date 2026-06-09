@@ -122,3 +122,29 @@ export function getSystemReport(payload: {
     body: JSON.stringify(payload),
   });
 }
+
+// --- Детализация метрик ---
+
+export type MetricDetailRow = {
+  columns: Record<string, unknown>;
+};
+
+export type MetricDetailResponse = {
+  metric_code: string;
+  metric_title: string;
+  rows: MetricDetailRow[];
+};
+
+export function getMetricDetail(payload: {
+  auth: BitrixAuthPayload;
+  metric_code: string;
+  employee_id: number;
+  date_from: string;
+  date_to: string;
+  settings: MetricSettings | null;
+}): Promise<MetricDetailResponse> {
+  return request<MetricDetailResponse>('/bitrix/metric-detail', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}

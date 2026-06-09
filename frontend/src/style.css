@@ -848,3 +848,19 @@ tbody tr:last-child td {
 .detail-table th {
   user-select: none;
 }
+
+/* Счётчик записей в детализации */
+.detail-count {
+  margin: 0 0 2px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* Адаптивность для детализации */
+@media (max-width: 600px) {
+  .detail-table th,
+  .detail-table td {
+    padding: 3px 4px;
+    font-size: 12px;
+  }
+}

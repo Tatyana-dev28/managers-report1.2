@@ -4,6 +4,8 @@ from app.schemas.bitrix_stateless import (
     BitrixCategoriesRequest,
     BitrixCategoryRead,
     BitrixCrmTypeRead,
+    BitrixMetricDetailRead,
+    BitrixMetricDetailRequest,
     BitrixMetricSettings,
     BitrixSettingsRequest,
     BitrixSettingsSaveRequest,
@@ -21,7 +23,11 @@ from app.services.bitrix_app_settings_service import (
     get_stages,
     save_metric_settings,
 )
-from app.services.bitrix_stateless_service import build_system_report, get_bitrix_users
+from app.services.bitrix_stateless_service import (
+    build_system_report,
+    get_bitrix_users,
+    get_metric_detail,
+)
 
 
 router = APIRouter(prefix="/bitrix", tags=["bitrix"])
@@ -64,5 +70,17 @@ def system_report(payload: BitrixSystemReportRequest) -> BitrixSystemReportRead:
         date_from=payload.date_from,
         date_to=payload.date_to,
         bitrix_user_ids=payload.bitrix_user_ids,
+        metric_settings=payload.settings,
+    )
+
+
+@router.post("/metric-detail", response_model=BitrixMetricDetailRead)
+def metric_detail(payload: BitrixMetricDetailRequest) -> BitrixMetricDetailRead:
+    return get_metric_detail(
+        auth=payload.auth,
+        metric_code=payload.metric_code,
+        employee_id=payload.employee_id,
+        date_from=payload.date_from,
+        date_to=payload.date_to,
         metric_settings=payload.settings,
     )
