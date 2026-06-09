@@ -470,12 +470,40 @@ function bindEvents() {
     render();
   });
 
-  // Поиск сотрудников
+  // Поиск сотрудников — обновляем только список, не перерендеривая всю страницу
   document.querySelector<HTMLInputElement>('#employee-search-input')?.addEventListener('input', (event) => {
     const input = event.currentTarget as HTMLInputElement;
     state.employeeSearch = input.value;
-    state.employeeFilterOpen = true;
-    render();
+
+    const query = state.employeeSearch.toLowerCase().trim();
+    const filteredUsers = query
+      ? state.users.filter((user) => user.full_name.toLowerCase().includes(query))
+      : state.users;
+
+    const optionsContainer = document.querySelector<HTMLDivElement>('.employee-options');
+    if (optionsContainer) {
+      optionsContainer.innerHTML = filteredUsers.length
+        ? filteredUsers.map(renderEmployeeOption).join('')
+        : '<div class="empty compact-empty">Сотрудники не найдены.</div>';
+    }
+
+    // Перепривязываем события на чекбоксы внутри обновлённого списка
+    optionsContainer?.querySelectorAll<HTMLInputElement>('.employee-option input').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const userId = Number(cb.value);
+        state.selectedUserIds = cb.checked
+          ? [...state.selectedUserIds, userId]
+          : state.selectedUserIds.filter((id) => id !== userId);
+        state.openedUserIds = state.openedUserIds.filter((id) => state.selectedUserIds.includes(id));
+        state.report = null;
+        // Обновляем текст summary (количество выбранных)
+        const summary = document.querySelector<HTMLElement>('.employee-filter-details summary');
+        if (summary) {
+          const count = state.selectedUserIds.length;
+          summary.textContent = count ? `Выбрано: ${count}` : 'Выберите сотрудников';
+        }
+      });
+    });
   });
 
   // Кастомный календарь: открытие/закрытие popup
