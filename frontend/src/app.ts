@@ -15,7 +15,7 @@ import type {
 } from './types';
 import logoUrl from './assets/sapp-logo.svg';
 
-// Коды метрик звонков, для которых работает Grid-фильтр детализации
+// Коды метрик звонков, для которых работает детализация
 const CALL_METRIC_CODES = new Set([
   'calls_total',
   'outgoing_calls',
@@ -25,7 +25,7 @@ const CALL_METRIC_CODES = new Set([
 
 /**
  * Формирует URL для открытия страницы детализации звонков Битрикс24
- * с предустановленным фильтром через grid_filter_fields.
+ * с предустановленным фильтром через fields[...] параметры.
  *
  * @param metricCode - код метрики (calls_total, outgoing_calls, etc.)
  * @param userId - ID сотрудника в Битрикс24
@@ -41,35 +41,43 @@ function buildCallGridFilterUrl(
 ): string | null {
   if (!CALL_METRIC_CODES.has(metricCode)) return null;
 
-  // Формируем объект фильтра для grid_filter_fields
-  // Коды полей — системные имена для /telephony/detail.php
-  const filterData: Record<string, string | number> = {
-    PORTAL_USER_ID: userId,
-    CALL_START_DATE_from: dateFrom,
-    CALL_START_DATE_to: dateTo,
+  // Форматируем даты в формат Битрикс24 (ДД.ММ.ГГГГ)
+  const fmtDate = (iso: string) => {
+    const [y, m, d] = iso.split('-');
+    return `${d}.${m}.${y}`;
   };
+
+  const params = new URLSearchParams();
+
+  // Идентификатор фильтра для грида детализации звонков
+  params.set('f_id', 'report_telephony_detail_grid');
+
+  // Фильтр по сотруднику
+  params.set('fields[PORTAL_USER_ID]', String(userId));
+
+  // Фильтр по дате (диапазон)
+  params.set('fields[CALL_START_DATE_datesel]', 'RANGE');
+  params.set('fields[CALL_START_DATE_from]', fmtDate(dateFrom));
+  params.set('fields[CALL_START_DATE_to]', fmtDate(dateTo));
 
   // Добавляем специфичные фильтры в зависимости от метрики
   switch (metricCode) {
     case 'outgoing_calls':
-      filterData.CALL_TYPE = 1;
+      // Исходящие: CALL_TYPE=2 в документации (Outgoing)
+      params.set('fields[CALL_TYPE]', '2');
       break;
     case 'successful_outgoing_calls':
-      filterData.CALL_TYPE = 1;
-      filterData.STATUS_SUCCESSFUL = 'Y';
+      params.set('fields[CALL_TYPE]', '2');
+      // Успешные: код ответа 200
+      params.set('fields[CALL_FAILED_CODE]', '200');
       break;
     case 'incoming_calls':
-      // Входящие: CALL_TYPE=2 (входящий) или 3 (входящий с перенаправлением)
-      // Не фильтруем — покажем все звонки, пользователь уточнит вручную
+      // Входящие: без доп. фильтра — покажем все звонки
       break;
     // calls_total — без дополнительных фильтров, все звонки
   }
 
-  // Кодируем в Base64 (с безопасной обработкой Unicode)
-  const jsonStr = JSON.stringify(filterData);
-  const utf8Str = unescape(encodeURIComponent(jsonStr));
-  const base64Filter = btoa(utf8Str);
-  return `/telephony/detail.php?grid_filter_id=CRM_TELEPHONY_REPORT_GRID&grid_filter_fields=${encodeURIComponent(base64Filter)}`;
+  return `/telephony/detail.php?${params.toString()}`;
 }
 
 type DateFilterValue =
@@ -693,9 +701,11 @@ function bindEvents() {
       event.preventDefault();
       console.log('[MetricLink] Navigating to:', path);
 
-      // Пробуем BX24.openPath (навигация внутри портала)
+      // Пробуем BX24.openPath с колбэком (навигация внутри портала)
       if (window.BX24?.openPath) {
-        window.BX24.openPath(path);
+        window.BX24.openPath(path, function(result?: unknown) {
+          console.log('[MetricLink] Slider opened, result:', result);
+        });
         return;
       }
 

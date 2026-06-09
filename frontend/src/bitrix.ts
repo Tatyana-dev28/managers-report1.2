@@ -5,7 +5,7 @@ declare global {
     BX24?: {
       init: (callback: () => void) => void;
       getAuth: () => { domain: string; access_token: string; [key: string]: any } | null;
-      openPath: (path: string) => void;
+      openPath: (path: string, callback?: (result?: unknown) => void) => void;
     };
   }
 }
