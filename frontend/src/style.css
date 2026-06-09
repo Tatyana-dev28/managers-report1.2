@@ -588,13 +588,10 @@ select:focus {
 
 .report-stack {
   display: grid;
-  gap: 8px;
 }
 
-.employee-report {
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  overflow: hidden;
+.employee-report + .employee-report {
+  border-top: 2px solid var(--line);
 }
 
 .employee-header {
@@ -617,6 +614,12 @@ select:focus {
 
 .employee-header:hover,
 .employee-header.active {
+  background: #eaf4ff;
+  color: #2c3137;
+}
+
+.employee-report:nth-child(even) > .employee-header:hover,
+.employee-report:nth-child(even) > .employee-header.active {
   background: #eaf4ff;
   color: #2c3137;
 }
