@@ -207,12 +207,3 @@ export async function startDetail() {
     app.innerHTML = renderError(`Ошибка загрузки данных: ${message}`);
   }
 }
-
-// Запускаем, если BX24 доступен
-if (window.BX24) {
-  window.BX24.init(() => {
-    startDetail();
-  });
-} else {
-  startDetail();
-}

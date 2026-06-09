@@ -11,7 +11,7 @@ function runApp() {
     try {
       const info = window.BX24.placement.info();
       const options = info?.options as Record<string, unknown> | undefined;
-      if (options?.employee_id) {
+      if (options?.employee_id && options?.metric) {
         isDetailView = true;
       }
     } catch {
@@ -22,7 +22,7 @@ function runApp() {
   // Fallback: проверяем URL параметры
   if (!isDetailView) {
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('employee_id')) {
+    if (urlParams.get('employee_id') && urlParams.get('metric')) {
       isDetailView = true;
     }
   }
