@@ -837,40 +837,8 @@ tbody tr:last-child td {
   color: #fff;
 }
 
-/* --- Resizer для изменения ширины колонок --- */
+/* --- Стили для таблицы детализации --- */
 
 .detail-table th {
-  position: relative;
-  user-select: none;
-}
-
-.column-resizer {
-  position: absolute;
-  top: 4px;
-  right: -5px;
-  width: 10px;
-  min-width: 10px;
-  height: calc(100% - 8px);
-  border: 0;
-  border-radius: 8px;
-  background:
-    linear-gradient(#9aa4b2, #9aa4b2) center / 2px 13px no-repeat,
-    linear-gradient(#cfd6e2, #cfd6e2) calc(50% + 3px) center / 1px 13px no-repeat;
-  cursor: col-resize;
-  padding: 0;
-  opacity: 0.75;
-  z-index: 10;
-  transition: background-color 0.15s ease, opacity 0.15s ease;
-}
-
-.column-resizer:hover,
-.column-resizer:focus-visible,
-.is-resizing-column .column-resizer {
-  background-color: #e8edf4;
-  opacity: 1;
-}
-
-.is-resizing-column {
-  cursor: col-resize;
   user-select: none;
 }

@@ -59,8 +59,6 @@ type ColumnDef = {
   title: string;
   /** Ширина в процентах */
   defaultWidth: number;
-  /** Минимальная ширина в процентах */
-  minWidth: number;
   /** Функция форматирования значения ячейки */
   render: (call: CallRecord) => string;
   /** CSS-класс для th/td */
@@ -71,36 +69,31 @@ const COLUMNS: ColumnDef[] = [
   {
     key: 'employee',
     title: 'Сотрудник',
-    defaultWidth: 22,
-    minWidth: 10,
+    defaultWidth: 25,
     render: (call) => escapeHtml(getEmployeeName(call)),
   },
   {
     key: 'phone',
     title: 'Номер телефона',
-    defaultWidth: 18,
-    minWidth: 10,
+    defaultWidth: 20,
     render: (call) => escapeHtml(call.PHONE_NUMBER || '—'),
   },
   {
     key: 'type',
     title: 'Тип звонка',
     defaultWidth: 16,
-    minWidth: 8,
     render: (call) => CALL_TYPE_LABELS[call.CALL_TYPE] || call.CALL_TYPE,
   },
   {
     key: 'date',
     title: 'Дата и время',
-    defaultWidth: 28,
-    minWidth: 12,
+    defaultWidth: 22,
     render: (call) => formatDate(call.CALL_START_DATE),
   },
   {
     key: 'duration',
     title: 'Длительность',
-    defaultWidth: 16,
-    minWidth: 8,
+    defaultWidth: 17,
     className: 'number-col',
     render: (call) => formatDuration(call.CALL_DURATION),
   },
@@ -198,127 +191,6 @@ async function loadUserNames(auth: BitrixAuthPayload): Promise<void> {
   }
 }
 
-// --- Состояние колонок (ширина в %) ---
-
-type ColumnState = {
-  key: string;
-  width: number;
-};
-
-let columnStates: ColumnState[] = [];
-
-function getDefaultColumnStates(): ColumnState[] {
-  return COLUMNS.map((col) => ({
-    key: col.key,
-    width: col.defaultWidth,
-  }));
-}
-
-function loadColumnStates(): ColumnState[] {
-  try {
-    const saved = localStorage.getItem('detail_column_states');
-    if (saved) {
-      const parsed: ColumnState[] = JSON.parse(saved);
-      const savedKeys = new Set(parsed.map((s) => s.key));
-      const allKeys = new Set(COLUMNS.map((c) => c.key));
-      if (savedKeys.size === allKeys.size && [...allKeys].every((k) => savedKeys.has(k))) {
-        return parsed;
-      }
-    }
-  } catch {
-    // игнорируем
-  }
-  return getDefaultColumnStates();
-}
-
-function saveColumnStates(states: ColumnState[]) {
-  try {
-    localStorage.setItem('detail_column_states', JSON.stringify(states));
-  } catch {
-    // игнорируем
-  }
-}
-
-// --- Resize колонок (как в эталонном проекте) ---
-
-let resizeColIndex: number | null = null;
-let resizeStartX = 0;
-let resizeStartWidth = 0;
-
-function initColumnResize(headerRow: HTMLTableRowElement, states: ColumnState[]) {
-  const ths = headerRow.querySelectorAll<HTMLTableHeaderCellElement>('th');
-
-  ths.forEach((th, index) => {
-    const resizer = document.createElement('button');
-    resizer.className = 'column-resizer';
-    resizer.dataset.columnIndex = String(index);
-    th.appendChild(resizer);
-
-    resizer.addEventListener('pointerdown', (event) => {
-      event.preventDefault();
-
-      const currentIndex = index;
-      const currentColumn = COLUMNS[currentIndex];
-      const pairedColumn = COLUMNS[currentIndex + 1] ?? COLUMNS[currentIndex - 1];
-      const direction = COLUMNS[currentIndex + 1] ? 1 : -1;
-
-      if (!currentColumn || !pairedColumn) return;
-
-      resizeColIndex = index;
-      resizeStartX = event.clientX;
-      resizeStartWidth = states[index].width;
-
-      const table = document.querySelector<HTMLTableElement>('.detail-table');
-      if (!table) return;
-      const tableWidth = table.getBoundingClientRect().width;
-
-      document.body.classList.add('is-resizing-column');
-      resizer.setPointerCapture(event.pointerId);
-
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        if (resizeColIndex === null) return;
-
-        const deltaPercent = ((moveEvent.clientX - resizeStartX) / tableWidth) * 100 * direction;
-        const pairIndex = currentIndex + 1 < states.length ? currentIndex + 1 : currentIndex - 1;
-        const availableWidth = resizeStartWidth + states[pairIndex].width;
-        const nextCurrentWidth = Math.min(
-          availableWidth - pairedColumn.minWidth,
-          Math.max(currentColumn.minWidth, resizeStartWidth + deltaPercent),
-        );
-
-        states[currentIndex].width = nextCurrentWidth;
-        states[pairIndex].width = availableWidth - nextCurrentWidth;
-
-        const colgroup = document.querySelector('colgroup');
-        if (colgroup) {
-          const cols = colgroup.querySelectorAll('col');
-          states.forEach((state, i) => {
-            if (cols[i]) {
-              cols[i].style.width = `${state.width}%`;
-            }
-          });
-        }
-      };
-
-      const handlePointerUp = () => {
-        if (resizeColIndex !== null) {
-          saveColumnStates(states);
-        }
-        resizeColIndex = null;
-        document.body.classList.remove('is-resizing-column');
-        resizer.releasePointerCapture(event.pointerId);
-        resizer.removeEventListener('pointermove', handlePointerMove);
-        resizer.removeEventListener('pointerup', handlePointerUp);
-        resizer.removeEventListener('pointercancel', handlePointerUp);
-      };
-
-      resizer.addEventListener('pointermove', handlePointerMove);
-      resizer.addEventListener('pointerup', handlePointerUp);
-      resizer.addEventListener('pointercancel', handlePointerUp);
-    });
-  });
-}
-
 // --- Рендеринг ---
 
 function renderTable(calls: CallRecord[], params: DetailParams) {
@@ -341,29 +213,25 @@ function renderTable(calls: CallRecord[], params: DetailParams) {
     `;
   }
 
-  columnStates = loadColumnStates();
-
-  const colHtml = columnStates
-    .map((state) => `<col style="width:${state.width}%">`)
+  const colHtml = COLUMNS
+    .map((col) => `<col style="width:${col.defaultWidth}%">`)
     .join('');
 
-  const headerHtml = columnStates
-    .map((state) => {
-      const colDef = COLUMNS.find((c) => c.key === state.key);
-      const className = colDef?.className ? ` class="${colDef.className}"` : '';
-      return `<th${className} data-col-key="${state.key}">
-        <span class="th-text">${escapeHtml(colDef?.title || state.key)}</span>
+  const headerHtml = COLUMNS
+    .map((col) => {
+      const className = col.className ? ` class="${col.className}"` : '';
+      return `<th${className} data-col-key="${col.key}">
+        <span class="th-text">${escapeHtml(col.title)}</span>
       </th>`;
     })
     .join('');
 
   const rowsHtml = calls
     .map((call) => {
-      const cellsHtml = columnStates
-        .map((state) => {
-          const colDef = COLUMNS.find((c) => c.key === state.key);
-          const className = colDef?.className ? ` class="${colDef.className}"` : '';
-          return `<td${className}>${colDef ? colDef.render(call) : ''}</td>`;
+      const cellsHtml = COLUMNS
+        .map((col) => {
+          const className = col.className ? ` class="${col.className}"` : '';
+          return `<td${className}>${col.render(call)}</td>`;
         })
         .join('');
       return `<tr>${cellsHtml}</tr>`;
@@ -496,21 +364,6 @@ async function loadCalls(auth: BitrixAuthPayload, params: DetailParams): Promise
 }
 
 /**
- * Инициализирует drag & drop и resize после рендеринга таблицы.
- */
-function initTableInteractions() {
-  const table = document.querySelector<HTMLTableElement>('.detail-table');
-  if (!table) return;
-
-  const headerRow = table.querySelector<HTMLTableRowElement>('thead tr');
-  if (!headerRow) return;
-
-  const states = loadColumnStates();
-
-  initColumnResize(headerRow, states);
-}
-
-/**
  * Делает функцию closeDetail глобально доступной для onclick в HTML-шаблонах.
  */
 (window as unknown as Record<string, unknown>).closeDetail = closeDetail;
@@ -555,7 +408,6 @@ export async function startDetail() {
     await loadUserNames(auth);
     const calls = await loadCalls(auth, params);
     app.innerHTML = renderTable(calls, params);
-    initTableInteractions();
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Неизвестная ошибка';
     app.innerHTML = renderError(`Ошибка загрузки данных: ${message}`);
