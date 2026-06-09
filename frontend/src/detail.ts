@@ -156,43 +156,46 @@ async function loadDetailData(
  */
 (window as unknown as Record<string, unknown>).closeDetail = closeDetail;
 
-export async function startDetail() {
+export async function startDetail(params?: Record<string, string>) {
   const app = document.getElementById('app');
   if (!app) return;
 
-  let params: DetailParams | null = null;
+  let detailParams: DetailParams | null = null;
 
-  if (window.BX24?.placement) {
-    try {
-      const info = window.BX24.placement.info();
-      params = info?.options as DetailParams;
-    } catch {
-      // placement.info может не сработать
-    }
+  if (params) {
+    detailParams = {
+      employee_id: params.employee_id,
+      date_from: params.date_from || '',
+      date_to: params.date_to || '',
+      metric: params.metric,
+      metric_title: params.metric_title || undefined,
+    };
   }
 
-  if (!params) {
+  if (!detailParams) {
+    // Fallback: читаем из URL
     const urlParams = new URLSearchParams(window.location.search);
     const empId = urlParams.get('employee_id');
-    if (empId) {
-      params = {
+    const metric = urlParams.get('metric');
+    if (empId && metric) {
+      detailParams = {
         employee_id: empId,
         date_from: urlParams.get('date_from') || '',
         date_to: urlParams.get('date_to') || '',
-        metric: urlParams.get('metric') || '',
+        metric: metric,
         metric_title: urlParams.get('metric_title') || undefined,
       };
     }
   }
 
-  if (!params || !params.employee_id || !params.metric) {
+  if (!detailParams || !detailParams.employee_id || !detailParams.metric) {
     app.innerHTML = renderError('Не переданы параметры для детализации');
     return;
   }
 
   // Проверяем, поддерживается ли метрика
-  if (!hasMetricDetail(params.metric)) {
-    app.innerHTML = renderError(`Детализация для метрики "${escapeHtml(params.metric)}" не поддерживается`);
+  if (!hasMetricDetail(detailParams.metric)) {
+    app.innerHTML = renderError(`Детализация для метрики "${escapeHtml(detailParams.metric)}" не поддерживается`);
     return;
   }
 
@@ -200,8 +203,8 @@ export async function startDetail() {
 
   try {
     const auth = await getBitrixAuth();
-    const data = await loadDetailData(auth, params);
-    app.innerHTML = renderTable(data, params);
+    const data = await loadDetailData(auth, detailParams);
+    app.innerHTML = renderTable(data, detailParams);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Неизвестная ошибка';
     app.innerHTML = renderError(`Ошибка загрузки данных: ${message}`);
