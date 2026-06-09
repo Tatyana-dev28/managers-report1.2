@@ -780,3 +780,36 @@ tbody tr:last-child td {
     width: 34%;
   }
 }
+
+.detail-container {
+  padding: 16px 20px;
+}
+
+.detail-header {
+  margin-bottom: 16px;
+}
+
+.detail-header h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.detail-period {
+  margin: 0 0 2px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.detail-count {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.detail-empty {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}

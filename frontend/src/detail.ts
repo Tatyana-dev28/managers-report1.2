@@ -60,14 +60,14 @@ function formatDuration(seconds: string): string {
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '—';
-  const d = new Date(dateStr.replace(' ', 'T') + 'Z');
-  return d.toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  // Формат из voximplant.statistic.get: "2026-06-08 10:30:00" (Europe/Moscow)
+  // Разбираем вручную, чтобы избежать проблем с часовыми поясами
+  const [datePart, timePart] = dateStr.split(' ');
+  if (!datePart) return dateStr;
+  const [y, m, d] = datePart.split('-');
+  const time = timePart || '00:00:00';
+  const [hh, mi] = time.split(':');
+  return `${d}.${m}.${y} ${hh}:${mi}`;
 }
 
 function escapeHtml(value: string): string {
@@ -76,6 +76,16 @@ function escapeHtml(value: string): string {
     .replace(/</g, '<')
     .replace(/>/g, '>')
     .replace(/"/g, '"');
+}
+
+function formatEmployeeName(call: CallRecord): string {
+  const name = (call.USER_NAME || '').trim();
+  const lastName = (call.USER_LAST_NAME || '').trim();
+  if (name || lastName) {
+    return `${name} ${lastName}`.trim();
+  }
+  // Если имя не пришло, показываем ID сотрудника
+  return `ID: ${call.PORTAL_USER_ID || '—'}`;
 }
 
 function renderTable(calls: CallRecord[], params: DetailParams) {
@@ -102,7 +112,7 @@ function renderTable(calls: CallRecord[], params: DetailParams) {
       <td>${CALL_TYPE_LABELS[call.CALL_TYPE] || call.CALL_TYPE}</td>
       <td class="number-col">${formatDuration(call.CALL_DURATION)}</td>
       <td>${call.CALL_FAILED_CODE === '200' ? '✅ Успешно' : call.CALL_FAILED_CODE ? '❌ Код: ' + escapeHtml(call.CALL_FAILED_CODE) : '—'}</td>
-      <td>${escapeHtml(call.USER_NAME + ' ' + call.USER_LAST_NAME || '—')}</td>
+      <td>${escapeHtml(formatEmployeeName(call))}</td>
     </tr>
   `).join('');
 
