@@ -588,10 +588,13 @@ select:focus {
 
 .report-stack {
   display: grid;
+  gap: 8px;
 }
 
-.employee-report + .employee-report {
-  border-top: 1px solid var(--line);
+.employee-report {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 .employee-header {
@@ -672,6 +675,7 @@ tbody tr:last-child td {
   padding: 12px 14px;
   background: var(--surface);
   color: var(--muted);
+  font-size: 13px;
 }
 
 .panel > .empty {
