@@ -338,12 +338,16 @@ async function loadCalls(auth: BitrixAuthPayload, params: DetailParams): Promise
   switch (params.metric) {
     case 'outgoing_calls':
       return fetchCallsByFilter(auth, { ...baseFilter, '=CALL_TYPE': 1 });
-    case 'successful_outgoing_calls':
-      return fetchCallsByFilter(auth, {
-        ...baseFilter,
-        '=CALL_TYPE': 1,
-        '=CALL_FAILED_CODE': '200',
+    case 'successful_outgoing_calls': {
+      // Успешные исходящие: CALL_TYPE=1, длительность > 10 сек,
+      // CALL_FAILED_CODE = "" или "200"
+      const calls = await fetchCallsByFilter(auth, { ...baseFilter, '=CALL_TYPE': 1 });
+      return calls.filter((call) => {
+        const duration = parseInt(call.CALL_DURATION, 10) || 0;
+        const failedCode = (call.CALL_FAILED_CODE || '').trim();
+        return duration > 10 && (failedCode === '' || failedCode === '200');
       });
+    }
     case 'incoming_calls': {
       // Входящие = CALL_TYPE 2 (входящий) + 3 (переадресованный)
       // voximplant.statistic.get не поддерживает множественный фильтр (IN),
