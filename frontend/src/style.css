@@ -634,7 +634,7 @@ select:focus {
   overflow-y: visible;
 }
 
-/* Основная таблица — ширина подстраивается под содержимое */
+/* Основная таблица (системные показатели) */
 table {
   width: 100%;
   border-collapse: collapse;
@@ -642,7 +642,7 @@ table {
   table-layout: auto;
 }
 
-/* Ячейки таблицы — компактные отступы, выравнивание по левому краю */
+/* Ячейки основной таблицы */
 th,
 td {
   padding: 6px 10px;
@@ -653,14 +653,14 @@ td {
   white-space: nowrap;
 }
 
-/* Заголовки */
+/* Заголовки основной таблицы */
 th {
   color: #22262c;
   background: linear-gradient(180deg, #ffffff 0%, #f5f7fa 100%);
   font-weight: 600;
 }
 
-/* Чередование строк */
+/* Чередование строк основной таблицы */
 tbody tr:nth-child(even) td {
   background: var(--surface-soft);
 }
@@ -673,6 +673,40 @@ tbody tr:last-child td {
 .number-col {
   text-align: right;
 }
+
+/* ========== ТАБЛИЦА ДЕТАЛИЗАЦИИ (независимые стили) ========== */
+
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  table-layout: auto;
+}
+
+.detail-table th,
+.detail-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.detail-table th {
+  color: #22262c;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f7fa 100%);
+  font-weight: 600;
+}
+
+.detail-table tbody tr:nth-child(even) td {
+  background: var(--surface-soft);
+}
+
+.detail-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 
 .metric-title-col {
   width: 78%;
@@ -782,6 +816,14 @@ tbody tr:last-child td {
   th,
   td {
     padding: 5px 6px;
+    font-size: 12px;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .detail-table th,
+  .detail-table td {
+    padding: 4px 5px;
     font-size: 12px;
     white-space: normal;
     word-break: break-word;
