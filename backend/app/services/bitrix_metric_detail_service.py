@@ -236,7 +236,7 @@ def _get_deal_rows(
     period_start: datetime,
     period_end: datetime,
 ) -> list[dict[str, Any]]:
-    return client.list_all(
+    rows = client.list_all(
         "crm.item.list",
         {
             "entityTypeId": 2,
@@ -257,6 +257,13 @@ def _get_deal_rows(
             "order": {"createdTime": "DESC"},
         },
     )
+
+    # Подменяем stageId на название стадии
+    if rows:
+        stage_map = _get_stage_name_map(client, 2)
+        rows = _enrich_items_with_stage_names(rows, stage_map)
+
+    return rows
 
 
 def _detail_new_deals(
@@ -525,6 +532,50 @@ def _get_stage_owner_ids(
     }
 
 
+def _get_stage_name_map(
+    client: BitrixRestClient,
+    entity_type_id: int,
+    category_id: int | None = None,
+) -> dict[str, str]:
+    """Получает словарь {stageId: stageName} для указанного entity_type_id."""
+    from app.services.bitrix_metric_sources_service import get_stage_entity_id
+
+    if entity_type_id == 2:
+        # Для сделок category_id может быть None — используем 0
+        resolved_category = category_id if category_id is not None else 0
+    else:
+        resolved_category = category_id if category_id is not None else 0
+
+    status_entity_id = get_stage_entity_id(entity_type_id, resolved_category)
+    try:
+        stages = client.list_all(
+            "crm.status.list",
+            {
+                "filter": {"ENTITY_ID": status_entity_id},
+                "order": {"SORT": "ASC"},
+            },
+        )
+        return {
+            stage.get("STATUS_ID", ""): stage.get("NAME", stage.get("STATUS_ID", ""))
+            for stage in stages
+        }
+    except Exception:
+        logger.warning(f"[MetricDetail] Failed to load stages for {status_entity_id}")
+        return {}
+
+
+def _enrich_items_with_stage_names(
+    rows: list[dict[str, Any]],
+    stage_name_map: dict[str, str],
+) -> list[dict[str, Any]]:
+    """Подменяет stageId на название стадии в каждой строке."""
+    for row in rows:
+        stage_id = row.get("stageId", "")
+        if stage_id in stage_name_map:
+            row["stageId"] = stage_name_map[stage_id]
+    return rows
+
+
 def _get_items_by_ids(
     client: BitrixRestClient,
     entity_type_id: int,
@@ -563,6 +614,11 @@ def _get_items_by_ids(
                 },
             )
         )
+
+    # Обогащаем строки названиями стадий
+    if rows:
+        stage_map = _get_stage_name_map(client, entity_type_id, category_id)
+        rows = _enrich_items_with_stage_names(rows, stage_map)
 
     return rows
 
