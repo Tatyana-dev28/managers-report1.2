@@ -693,6 +693,13 @@ tbody tr:last-child td {
   white-space: nowrap;
 }
 
+/* Колонки с длинным текстом (название сделки, название встречи, телефон) */
+/* Переносим длинный текст, чтобы не растягивать колонку */
+.detail-table td.text-col {
+  white-space: normal;
+  word-break: break-word;
+}
+
 .detail-table th {
   color: #22262c;
   background: linear-gradient(180deg, #ffffff 0%, #f5f7fa 100%);

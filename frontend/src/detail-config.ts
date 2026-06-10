@@ -115,6 +115,7 @@ const CALL_COLUMNS: ColumnDef[] = [
     key: 'PHONE_NUMBER',
     title: 'Номер телефона',
     defaultWidth: 18,
+    className: 'text-col',
     render: (col) => escapeHtml(str(col['PHONE_NUMBER']) || '—'),
   },
   {
@@ -155,6 +156,7 @@ const SMART_PROCESS_COLUMNS: ColumnDef[] = [
     key: 'title',
     title: 'Название',
     defaultWidth: 32,
+    className: 'text-col',
     render: (col) => escapeHtml(str(col['title']) || '—'),
   },
   {
@@ -188,6 +190,7 @@ const DEAL_COLUMNS: ColumnDef[] = [
     key: 'title',
     title: 'Название сделки',
     defaultWidth: 32,
+    className: 'text-col',
     render: (col) => escapeHtml(str(col['title']) || '—'),
   },
   {
