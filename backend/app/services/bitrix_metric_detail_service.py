@@ -158,7 +158,7 @@ def _get_meeting_rows(
 ) -> list[dict[str, Any]]:
     if entity_type_id is None:
         return []
-    return client.list_all(
+    rows = client.list_all(
         "crm.item.list",
         {
             "entityTypeId": entity_type_id,
@@ -179,6 +179,13 @@ def _get_meeting_rows(
             "order": {"createdTime": "DESC"},
         },
     )
+
+    # Подменяем stageId на название стадии
+    if rows:
+        stage_map = _get_stage_name_map(client, entity_type_id)
+        rows = _enrich_items_with_stage_names(rows, stage_map)
+
+    return rows
 
 
 def _detail_meetings_created(
