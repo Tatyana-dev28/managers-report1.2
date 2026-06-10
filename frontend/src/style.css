@@ -842,12 +842,12 @@ tbody tr:last-child td {
 
 .detail-table {
   border-collapse: collapse;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
-.detail-table th,
-.detail-table td {
-  padding: 2px 3px !important;
+.table-wrap .detail-table th,
+.table-wrap .detail-table td {
+  padding: 2px 3px;
   white-space: nowrap;
 }
 
@@ -864,9 +864,9 @@ tbody tr:last-child td {
 
 /* Адаптивность для детализации */
 @media (max-width: 600px) {
-  .detail-table th,
-  .detail-table td {
-    padding: 1px 2px !important;
+  .table-wrap .detail-table th,
+  .table-wrap .detail-table td {
+    padding: 1px 2px;
     font-size: 12px;
   }
 }

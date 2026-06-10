@@ -126,20 +126,20 @@ const CALL_COLUMNS: ColumnDef[] = [
   {
     key: 'CALL_START_DATE',
     title: 'Дата и время',
-    defaultWidth: 28,
+    defaultWidth: 24,
     render: (col) => formatDate(str(col['CALL_START_DATE'])),
   },
   {
     key: 'CALL_DURATION',
     title: 'Длительность',
-    defaultWidth: 18,
+    defaultWidth: 16,
     className: 'number-col',
     render: (col) => formatDuration(str(col['CALL_DURATION'])),
   },
   {
     key: 'COST',
     title: 'Стоимость',
-    defaultWidth: 12,
+    defaultWidth: 10,
     className: 'number-col',
     render: (col) => {
       const cost = str(col['COST']);
@@ -154,25 +154,25 @@ const SMART_PROCESS_COLUMNS: ColumnDef[] = [
   {
     key: 'title',
     title: 'Название',
-    defaultWidth: 35,
+    defaultWidth: 32,
     render: (col) => escapeHtml(str(col['title']) || '—'),
   },
   {
     key: 'stageId',
     title: 'Стадия',
-    defaultWidth: 20,
+    defaultWidth: 18,
     render: (col) => escapeHtml(str(col['stageId']) || '—'),
   },
   {
     key: 'createdTime',
     title: 'Дата создания',
-    defaultWidth: 20,
+    defaultWidth: 18,
     render: (col) => formatDate(str(col['createdTime'])),
   },
   {
     key: 'opportunity',
     title: 'Сумма',
-    defaultWidth: 15,
+    defaultWidth: 14,
     className: 'number-col',
     render: (col) => {
       const val = str(col['opportunity']);
@@ -187,19 +187,19 @@ const DEAL_COLUMNS: ColumnDef[] = [
   {
     key: 'title',
     title: 'Название сделки',
-    defaultWidth: 35,
+    defaultWidth: 32,
     render: (col) => escapeHtml(str(col['title']) || '—'),
   },
   {
     key: 'stageId',
     title: 'Стадия',
-    defaultWidth: 18,
+    defaultWidth: 16,
     render: (col) => escapeHtml(str(col['stageId']) || '—'),
   },
   {
     key: 'opportunity',
     title: 'Бюджет',
-    defaultWidth: 15,
+    defaultWidth: 14,
     className: 'number-col',
     render: (col) => {
       const val = str(col['opportunity']);
@@ -209,7 +209,7 @@ const DEAL_COLUMNS: ColumnDef[] = [
   {
     key: 'createdTime',
     title: 'Дата создания',
-    defaultWidth: 22,
+    defaultWidth: 20,
     render: (col) => formatDate(str(col['createdTime'])),
   },
 ];
