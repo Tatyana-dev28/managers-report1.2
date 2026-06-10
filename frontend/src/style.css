@@ -624,42 +624,49 @@ select:focus {
   color: #2c3137;
 }
 
+/* ========== ИСПРАВЛЕННЫЕ СТИЛИ ДЛЯ ТАБЛИЦ ========== */
+
+/* Обертка таблицы с горизонтальной прокруткой */
 .table-wrap {
   border: 1px solid var(--line);
   border-radius: 6px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
+/* Основная таблица - убираем фиксированную раскладку */
 table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
   background: #fff;
+  table-layout: auto;
+  min-width: 700px;
 }
 
-.metric-title-col {
-  width: 78%;
+/* Таблица детализации - шире из-за большего количества колонок */
+.detail-table {
+  min-width: 900px;
 }
 
-.system-value-col {
-  width: 22%;
-}
-
+/* Ячейки таблицы */
 th,
 td {
-  padding: 5px 16px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: middle;
   font-size: 13px;
+  white-space: nowrap;
 }
 
+/* Заголовки */
 th {
   color: #22262c;
   background: linear-gradient(180deg, #ffffff 0%, #f5f7fa 100%);
   font-weight: 600;
 }
 
+/* Чередование строк */
 tbody tr:nth-child(even) td {
   background: var(--surface-soft);
 }
@@ -668,9 +675,17 @@ tbody tr:last-child td {
   border-bottom: 0;
 }
 
+/* Числовые колонки */
 .number-col {
   text-align: right;
-  white-space: nowrap;
+}
+
+.metric-title-col {
+  width: 78%;
+}
+
+.system-value-col {
+  width: 22%;
 }
 
 .metric-link {
@@ -711,6 +726,7 @@ tbody tr:last-child td {
   font-size: 13px;
 }
 
+/* Адаптивность для мобильных устройств */
 @media (max-width: 760px) {
   #app {
     padding: 10px;
@@ -768,21 +784,26 @@ tbody tr:last-child td {
     width: 100%;
   }
 
+  /* Адаптив для таблиц на мобильных */
   th,
   td {
-    padding: 6px 10px;
-    font-size: 13px;
+    padding: 6px 8px;
+    font-size: 12px;
+    white-space: normal;
+    word-break: break-word;
+    min-width: 100px;
   }
-
-  .metric-title-col {
-    width: 66%;
+  
+  table {
+    min-width: 100%;
   }
-
-  .system-value-col {
-    width: 34%;
+  
+  .detail-table {
+    min-width: 100%;
   }
 }
 
+/* Стили для детализации */
 .detail-container {
   padding: 8px 12px;
 }
@@ -804,7 +825,7 @@ tbody tr:last-child td {
 }
 
 .detail-count {
-  margin: 0;
+  margin: 0 0 2px;
   font-size: 13px;
   color: var(--muted);
 }
@@ -836,37 +857,4 @@ tbody tr:last-child td {
 .detail-back-btn:hover {
   background: var(--primary);
   color: #fff;
-}
-
-/* --- Стили для таблицы детализации --- */
-
-.detail-table {
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-
-.table-wrap .detail-table th,
-.table-wrap .detail-table td {
-  padding: 2px 3px;
-  white-space: nowrap;
-}
-
-.detail-table th {
-  user-select: none;
-}
-
-/* Счётчик записей в детализации */
-.detail-count {
-  margin: 0 0 2px;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-/* Адаптивность для детализации */
-@media (max-width: 600px) {
-  .table-wrap .detail-table th,
-  .table-wrap .detail-table td {
-    padding: 1px 2px;
-    font-size: 12px;
-  }
 }
