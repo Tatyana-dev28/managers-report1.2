@@ -268,10 +268,11 @@ def _get_deal_rows(
         },
     )
 
-    # Подменяем stageId на название стадии
+    # Подменяем stageId на название стадии.
+    # Для сделок (entity_type_id=2) используем category_id=0 (основная воронка),
+    # т.к. финальные стадии вроде WON едины для всех воронок сделок.
     if rows:
-        first_category_id = _as_int(rows[0].get("categoryId"))
-        stage_map = _get_stage_name_map(client, 2, first_category_id)
+        stage_map = _get_stage_name_map(client, 2, 0)
         rows = _enrich_items_with_stage_names(rows, stage_map)
 
     return rows
@@ -325,12 +326,19 @@ def _detail_successful_sale_deals(
     if not deal_ids:
         return []
 
-    return _get_items_by_ids(
+    rows = _get_items_by_ids(
         client=client,
         entity_type_id=2,
         owner_ids=deal_ids,
         bitrix_user_id=None,
     )
+
+    # Обогащаем строки названиями стадий (entity_type_id=2, category_id=0 — основная воронка сделок)
+    if rows:
+        stage_map = _get_stage_name_map(client, 2, 0)
+        rows = _enrich_items_with_stage_names(rows, stage_map)
+
+    return rows
 
 
 # ============================================================
