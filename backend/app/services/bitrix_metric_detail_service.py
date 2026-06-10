@@ -270,7 +270,8 @@ def _get_deal_rows(
 
     # Подменяем stageId на название стадии
     if rows:
-        stage_map = _get_stage_name_map(client, 2)
+        first_category_id = _as_int(rows[0].get("categoryId"))
+        stage_map = _get_stage_name_map(client, 2, first_category_id)
         rows = _enrich_items_with_stage_names(rows, stage_map)
 
     return rows
@@ -361,12 +362,20 @@ def _get_contract_rows_by_stage(
     if not owner_ids:
         return []
 
-    return _get_items_by_ids(
+    rows = _get_items_by_ids(
         client=client,
         entity_type_id=entity_type_id,
         owner_ids=owner_ids,
         bitrix_user_id=None if skip_assigned_filter else bitrix_user_id,
     )
+
+    # Обогащаем строки названиями стадий с определением category_id из данных
+    if rows:
+        first_category_id = _as_int(rows[0].get("categoryId"))
+        stage_map = _get_stage_name_map(client, entity_type_id, first_category_id)
+        rows = _enrich_items_with_stage_names(rows, stage_map)
+
+    return rows
 
 
 def _detail_contracts_sent(
@@ -433,12 +442,20 @@ def _get_invoice_rows_by_stage(
     if not owner_ids:
         return []
 
-    return _get_items_by_ids(
+    rows = _get_items_by_ids(
         client=client,
         entity_type_id=entity_type_id,
         owner_ids=owner_ids,
         bitrix_user_id=None if skip_assigned_filter else bitrix_user_id,
     )
+
+    # Обогащаем строки названиями стадий
+    if rows:
+        first_category_id = _as_int(rows[0].get("categoryId"))
+        stage_map = _get_stage_name_map(client, entity_type_id, first_category_id)
+        rows = _enrich_items_with_stage_names(rows, stage_map)
+
+    return rows
 
 
 def _detail_invoices_sent(
@@ -628,11 +645,6 @@ def _get_items_by_ids(
                 },
             )
         )
-
-    # Обогащаем строки названиями стадий
-    if rows:
-        stage_map = _get_stage_name_map(client, entity_type_id, category_id)
-        rows = _enrich_items_with_stage_names(rows, stage_map)
 
     return rows
 
