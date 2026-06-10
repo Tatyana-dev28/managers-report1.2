@@ -167,6 +167,7 @@ def _get_meeting_rows(
                 "title",
                 "assignedById",
                 "createdBy",
+                "categoryId",
                 "stageId",
                 "createdTime",
                 "updatedTime",
@@ -182,7 +183,9 @@ def _get_meeting_rows(
 
     # Подменяем stageId на название стадии
     if rows:
-        stage_map = _get_stage_name_map(client, entity_type_id)
+        # Берём categoryId из первой строки для определения правильного ENTITY_ID стадий
+        first_category_id = _as_int(rows[0].get("categoryId"))
+        stage_map = _get_stage_name_map(client, entity_type_id, first_category_id)
         rows = _enrich_items_with_stage_names(rows, stage_map)
 
     return rows
@@ -547,28 +550,32 @@ def _get_stage_name_map(
     """Получает словарь {stageId: stageName} для указанного entity_type_id."""
     from app.services.bitrix_metric_sources_service import get_stage_entity_id
 
-    if entity_type_id == 2:
-        # Для сделок category_id может быть None — используем 0
-        resolved_category = category_id if category_id is not None else 0
-    else:
-        resolved_category = category_id if category_id is not None else 0
+    # Пробуем получить стадии для переданного category_id или для 0
+    candidate_categories: list[int] = []
+    if category_id is not None:
+        candidate_categories.append(category_id)
+    candidate_categories.append(0)
 
-    status_entity_id = get_stage_entity_id(entity_type_id, resolved_category)
-    try:
-        stages = client.list_all(
-            "crm.status.list",
-            {
-                "filter": {"ENTITY_ID": status_entity_id},
-                "order": {"SORT": "ASC"},
-            },
-        )
-        return {
-            stage.get("STATUS_ID", ""): stage.get("NAME", stage.get("STATUS_ID", ""))
-            for stage in stages
-        }
-    except Exception:
-        logger.warning(f"[MetricDetail] Failed to load stages for {status_entity_id}")
-        return {}
+    for cat_id in candidate_categories:
+        status_entity_id = get_stage_entity_id(entity_type_id, cat_id)
+        try:
+            stages = client.list_all(
+                "crm.status.list",
+                {
+                    "filter": {"ENTITY_ID": status_entity_id},
+                    "order": {"SORT": "ASC"},
+                },
+            )
+            if stages:
+                return {
+                    stage.get("STATUS_ID", ""): stage.get("NAME", stage.get("STATUS_ID", ""))
+                    for stage in stages
+                }
+        except Exception:
+            logger.warning(f"[MetricDetail] Failed to load stages for {status_entity_id}")
+
+    logger.warning(f"[MetricDetail] No stages found for entity_type_id={entity_type_id}, category_id={category_id}")
+    return {}
 
 
 def _enrich_items_with_stage_names(
