@@ -624,7 +624,7 @@ select:focus {
   color: #2c3137;
 }
 
-/* ========== ИСПРАВЛЕННЫЕ СТИЛИ ДЛЯ ТАБЛИЦ ========== */
+/* ========== СТИЛИ ДЛЯ ТАБЛИЦ ========== */
 
 /* Обертка таблицы с горизонтальной прокруткой */
 .table-wrap {
@@ -634,24 +634,18 @@ select:focus {
   overflow-y: visible;
 }
 
-/* Основная таблица - убираем фиксированную раскладку */
+/* Основная таблица — ширина подстраивается под содержимое */
 table {
   width: 100%;
   border-collapse: collapse;
   background: #fff;
   table-layout: auto;
-  min-width: 700px;
 }
 
-/* Таблица детализации - шире из-за большего количества колонок */
-.detail-table {
-  min-width: 900px;
-}
-
-/* Ячейки таблицы */
+/* Ячейки таблицы — компактные отступы, выравнивание по левому краю */
 th,
 td {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: middle;
@@ -675,7 +669,7 @@ tbody tr:last-child td {
   border-bottom: 0;
 }
 
-/* Числовые колонки */
+/* Числовые колонки — выравнивание вправо */
 .number-col {
   text-align: right;
 }
@@ -787,19 +781,10 @@ tbody tr:last-child td {
   /* Адаптив для таблиц на мобильных */
   th,
   td {
-    padding: 6px 8px;
+    padding: 5px 6px;
     font-size: 12px;
     white-space: normal;
     word-break: break-word;
-    min-width: 100px;
-  }
-  
-  table {
-    min-width: 100%;
-  }
-  
-  .detail-table {
-    min-width: 100%;
   }
 }
 

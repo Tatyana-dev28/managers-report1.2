@@ -62,7 +62,7 @@ function renderTable(data: MetricDetailResponse, params: DetailParams) {
   }
 
   const colHtml = columns
-    .map((col) => `<col style="width:${col.defaultWidth}%">`)
+    .map(() => '<col>')
     .join('');
 
   const headerHtml = columns
