@@ -18,6 +18,22 @@ function getDetailParamsFromUrl(): Record<string, string> | null {
   return null;
 }
 
+/**
+ * Обрабатывает событие pageshow.
+ * Если страница восстановлена из bfcache (event.persisted === true),
+ * значит пользователь закрыл вкладку/приложение и открыл заново,
+ * и браузер восстановил состояние iframe из кэша.
+ * В этом случае перезагружаем страницу, чтобы сбросить состояние.
+ */
+function setupPageShowReset(): void {
+  window.addEventListener('pageshow', (event: PageTransitionEvent) => {
+    if (event.persisted) {
+      // Страница восстановлена из bfcache — перезагружаем для сброса состояния
+      window.location.reload();
+    }
+  });
+}
+
 function runApp() {
   if (window.BX24 && typeof window.BX24.init === 'function') {
     window.BX24.init(() => {
@@ -62,3 +78,6 @@ if (document.readyState === 'loading') {
 } else {
   runApp();
 }
+
+// Обработчик pageshow для сброса состояния при восстановлении из bfcache
+setupPageShowReset();
