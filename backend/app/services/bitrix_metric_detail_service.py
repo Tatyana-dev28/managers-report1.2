@@ -454,7 +454,7 @@ def _get_invoice_rows_by_stage(
         client=client,
         entity_type_id=entity_type_id,
         owner_ids=owner_ids,
-        bitrix_user_id=None if skip_assigned_filter else bitrix_user_id,
+        bitrix_user_id=bitrix_user_id,
     )
 
     # Обогащаем строки названиями стадий
@@ -539,21 +539,9 @@ def _get_stage_owner_ids(
                 ">=CREATED_TIME": _bitrix_dt(period_start),
                 "<CREATED_TIME": _bitrix_dt(period_end),
             },
-            "select": ["ID", "OWNER_ID", "STAGE_ID", "CATEGORY_ID", "CREATED_TIME", "CREATED_BY"],
+            "select": ["ID", "OWNER_ID", "STAGE_ID", "CATEGORY_ID", "CREATED_TIME"],
         },
     )
-
-    if skip_assigned_filter:
-        # Фильтруем по CREATED_BY из stage history — кто именно перевёл
-        # элемент в эту стадию. Это нужно для терминальных стадий (оплачен),
-        # где элемент мог быть переназначен другому сотруднику после перехода.
-        owner_ids = {
-            row.get("OWNER_ID")
-            for row in history_rows
-            if _as_int(row.get("CREATED_BY")) == bitrix_user_id
-        }
-        return {oid for oid in owner_ids if oid is not None}
-
     owner_ids = {
         owner_id
         for owner_id in (_as_int(row.get("OWNER_ID")) for row in history_rows)
@@ -561,6 +549,9 @@ def _get_stage_owner_ids(
     }
     if not owner_ids:
         return set()
+
+    if skip_assigned_filter:
+        return owner_ids
 
     assigned_rows = _get_items_by_ids(
         client=client,
