@@ -100,9 +100,8 @@ def collect_bitrix_system_metrics(
         category_id=metric_settings.sale_deal_category_id,
         skip_assigned_filter=True,
     )
-    # Для суммы оплаченных счетов тоже не фильтруем по assignedById —
-    # счёт мог быть переназначен после оплаты, но оплата была совершена
-    # в отчётном периоде именно этим сотрудником.
+    # paid_invoice_ids уже отфильтрованы по CREATED_BY из stage history,
+    # поэтому дополнительная фильтрация по assignedById не требуется.
     paid_invoice_rows = get_items_by_ids(
         client=client,
         entity_type_id=metric_settings.invoice_entity_type_id,
@@ -248,7 +247,7 @@ def get_stage_history_rows(
                 ">=CREATED_TIME": bitrix_datetime(period_start),
                 "<CREATED_TIME": bitrix_datetime(period_end),
             },
-            "select": ["ID", "OWNER_ID", "STAGE_ID", "CATEGORY_ID", "CREATED_TIME"],
+            "select": ["ID", "OWNER_ID", "STAGE_ID", "CATEGORY_ID", "CREATED_TIME", "CREATED_BY"],
         },
     )
     logger.info(f"=== STAGE HISTORY RESULT: {len(result)} rows ===")
@@ -270,10 +269,10 @@ def get_stage_owner_ids_for_user(
 ) -> set[int]:
     """Получает ID элементов, которые перешли в указанные стадии в заданном периоде.
 
-    Если skip_assigned_filter=True, не фильтрует по текущему assignedById —
-    используются только данные из stage history. Это нужно для терминальных
-    стадий (подписан, оплачен, успешная сделка), где элемент мог быть
-    переназначен другому сотруднику после перехода в эту стадию.
+    Если skip_assigned_filter=True, фильтрует по CREATED_BY из stage history,
+    а не по текущему assignedById. Это нужно для терминальных стадий
+    (подписан, оплачен, успешная сделка), где элемент мог быть переназначен
+    другому сотруднику после перехода в эту стадию.
     """
     if entity_type_id is None or not stage_ids:
         return set()
@@ -285,6 +284,23 @@ def get_stage_owner_ids_for_user(
         period_start=period_start,
         period_end=period_end,
     )
+    if skip_assigned_filter:
+        # Для терминальных стадий не фильтруем по assignedById —
+        # элемент мог быть переназначен после перехода в эту стадию.
+        # Вместо этого фильтруем по CREATED_BY из stage history —
+        # кто именно перевёл элемент в эту стадию.
+        owner_ids = {
+            row.get("OWNER_ID")
+            for row in history_rows
+            if as_int(row.get("CREATED_BY")) == bitrix_user_id
+        }
+        owner_ids = {oid for oid in owner_ids if oid is not None}
+        logger.info(
+            f"=== STAGE HISTORY (filtered by CREATED_BY={bitrix_user_id}): "
+            f"entityTypeId={entity_type_id}, owner_ids={owner_ids}, count={len(owner_ids)} ==="
+        )
+        return owner_ids
+
     owner_ids = {
         owner_id
         for owner_id in (as_int(row.get("OWNER_ID")) for row in history_rows)
@@ -292,16 +308,6 @@ def get_stage_owner_ids_for_user(
     }
     if not owner_ids:
         return set()
-
-    if skip_assigned_filter:
-        # Для терминальных стадий не фильтруем по assignedById —
-        # элемент мог быть переназначен после перехода в эту стадию.
-        # Стадия истории уже гарантирует, что переход был в нужном периоде.
-        logger.info(
-            f"=== STAGE HISTORY (skip_assigned): entityTypeId={entity_type_id}, "
-            f"owner_ids={owner_ids}, count={len(owner_ids)} ==="
-        )
-        return owner_ids
 
     logger.info(f"=== GET_ITEMS: entityTypeId={entity_type_id}, owner_ids={owner_ids}, bitrix_user_id={bitrix_user_id}, category_id={category_id} ===")
     assigned_rows = get_items_by_ids(

@@ -437,6 +437,22 @@ function renderEmployeeMetrics(employee: EmployeeSystemReport) {
   `;
 }
 
+/** Обработчик изменения чекбокса сотрудника — обновляет состояние и summary без полного перерендера */
+function handleEmployeeCheckboxChange(input: HTMLInputElement) {
+  const userId = Number(input.value);
+  state.selectedUserIds = input.checked
+    ? [...state.selectedUserIds, userId]
+    : state.selectedUserIds.filter((id) => id !== userId);
+  state.openedUserIds = state.openedUserIds.filter((id) => state.selectedUserIds.includes(id));
+  state.report = null;
+  // Обновляем текст summary (количество выбранных)
+  const summary = document.querySelector<HTMLElement>('.employee-filter-details summary');
+  if (summary) {
+    const count = state.selectedUserIds.length;
+    summary.textContent = count ? `Выбрано: ${count}` : 'Выберите сотрудников';
+  }
+}
+
 function bindEvents() {
   // Закрываем dropdown при клике вне
   document.removeEventListener('click', handleOutsideClick);
@@ -500,13 +516,7 @@ function bindEvents() {
 
   document.querySelectorAll<HTMLInputElement>('.employee-option input').forEach((input) => {
     input.addEventListener('change', () => {
-      const userId = Number(input.value);
-      state.selectedUserIds = input.checked
-        ? [...state.selectedUserIds, userId]
-        : state.selectedUserIds.filter((id) => id !== userId);
-      state.openedUserIds = state.openedUserIds.filter((id) => state.selectedUserIds.includes(id));
-      state.report = null;
-      render();
+      handleEmployeeCheckboxChange(input);
     });
   });
 
@@ -543,18 +553,7 @@ function bindEvents() {
     // Перепривязываем события на чекбоксы внутри обновлённого списка
     optionsContainer?.querySelectorAll<HTMLInputElement>('.employee-option input').forEach((cb) => {
       cb.addEventListener('change', () => {
-        const userId = Number(cb.value);
-        state.selectedUserIds = cb.checked
-          ? [...state.selectedUserIds, userId]
-          : state.selectedUserIds.filter((id) => id !== userId);
-        state.openedUserIds = state.openedUserIds.filter((id) => state.selectedUserIds.includes(id));
-        state.report = null;
-        // Обновляем текст summary (количество выбранных)
-        const summary = document.querySelector<HTMLElement>('.employee-filter-details summary');
-        if (summary) {
-          const count = state.selectedUserIds.length;
-          summary.textContent = count ? `Выбрано: ${count}` : 'Выберите сотрудников';
-        }
+        handleEmployeeCheckboxChange(cb);
       });
     });
   });
