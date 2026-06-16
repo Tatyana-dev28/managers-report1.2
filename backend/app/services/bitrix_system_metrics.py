@@ -71,7 +71,6 @@ def collect_bitrix_system_metrics(
         bitrix_user_id=bitrix_user_id,
         period_start=period_start,
         period_end=period_end,
-        skip_assigned_filter=True,
     )
     sent_invoice_ids = get_stage_owner_ids_for_user(
         client=client,
@@ -88,7 +87,6 @@ def collect_bitrix_system_metrics(
         bitrix_user_id=bitrix_user_id,
         period_start=period_start,
         period_end=period_end,
-        skip_assigned_filter=True,
     )
     # Получаем детальные строки оплаченных счетов с фильтром по assignedById,
     # чтобы сумма и количество считались индивидуально для каждого сотрудника.
@@ -106,7 +104,6 @@ def collect_bitrix_system_metrics(
         period_start=period_start,
         period_end=period_end,
         category_id=metric_settings.sale_deal_category_id,
-        skip_assigned_filter=True,
     )
     logger.info(f"=== RESULTS: meetings_held={len(held_meeting_ids)}, meetings_created={len(meeting_rows)}, "
                 f"calls={len(calls)}, deals={len(deals)}, "
@@ -120,6 +117,7 @@ def collect_bitrix_system_metrics(
         "calls_total": Decimal(len(calls)),
         "outgoing_calls": Decimal(count_calls(calls, call_types={"1"})),
         "successful_outgoing_calls": Decimal(count_successful_outgoing_calls(calls)),
+        "incoming_calls": Decimal(count_calls(calls, call_types={"2", "3"})),
         "commercial_offers_sent": Decimal(
             count_deals_by_category(deals, metric_settings.cold_base_deal_category_id)
         ),

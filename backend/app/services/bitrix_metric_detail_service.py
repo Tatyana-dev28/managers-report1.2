@@ -321,7 +321,6 @@ def _detail_successful_sale_deals(
         period_start=period_start,
         period_end=period_end,
         category_id=metric_settings.sale_deal_category_id,
-        skip_assigned_filter=True,
     )
     if not deal_ids:
         return []
@@ -330,7 +329,7 @@ def _detail_successful_sale_deals(
         client=client,
         entity_type_id=2,
         owner_ids=deal_ids,
-        bitrix_user_id=None,
+        bitrix_user_id=bitrix_user_id,
     )
 
     # Обогащаем строки названиями стадий (entity_type_id=2, category_id=0 — основная воронка сделок)
@@ -417,7 +416,6 @@ def _detail_contracts_signed(
         bitrix_user_id=bitrix_user_id,
         period_start=period_start,
         period_end=period_end,
-        skip_assigned_filter=True,
     )
 
 
@@ -428,13 +426,13 @@ def _detail_contracts_signed(
 
 def _get_invoice_rows_by_stage(
     client: BitrixRestClient,
+    entity_type_id: int,
     stage_ids: set[str],
     bitrix_user_id: int,
     period_start: datetime,
     period_end: datetime,
     skip_assigned_filter: bool = False,
 ) -> list[dict[str, Any]]:
-    entity_type_id = 31  # SMART_INVOICE
     if not stage_ids:
         return []
 
@@ -475,6 +473,7 @@ def _detail_invoices_sent(
 ) -> list[dict[str, Any]]:
     return _get_invoice_rows_by_stage(
         client=client,
+        entity_type_id=metric_settings.invoice_entity_type_id,
         stage_ids=_optional_set(metric_settings.invoice_sent_stage_id),
         bitrix_user_id=bitrix_user_id,
         period_start=period_start,
@@ -491,6 +490,7 @@ def _detail_invoices_paid(
 ) -> list[dict[str, Any]]:
     return _get_invoice_rows_by_stage(
         client=client,
+        entity_type_id=metric_settings.invoice_entity_type_id,
         stage_ids=_optional_set(metric_settings.invoice_paid_stage_id),
         bitrix_user_id=bitrix_user_id,
         period_start=period_start,
