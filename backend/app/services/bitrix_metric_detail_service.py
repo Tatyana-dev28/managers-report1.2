@@ -330,11 +330,12 @@ def _detail_successful_sale_deals(
         entity_type_id=2,
         owner_ids=deal_ids,
         bitrix_user_id=bitrix_user_id,
+        category_id=metric_settings.sale_deal_category_id,
     )
 
-    # Обогащаем строки названиями стадий (entity_type_id=2, category_id=0 — основная воронка сделок)
+    # Обогащаем строки названиями стадий
     if rows:
-        stage_map = _get_stage_name_map(client, 2, 0)
+        stage_map = _get_stage_name_map(client, 2, metric_settings.sale_deal_category_id)
         rows = _enrich_items_with_stage_names(rows, stage_map)
 
     return rows
@@ -495,7 +496,6 @@ def _detail_invoices_paid(
         bitrix_user_id=bitrix_user_id,
         period_start=period_start,
         period_end=period_end,
-        skip_assigned_filter=True,
     )
 
 
