@@ -47,7 +47,6 @@ def get_bitrix_users(auth: BitrixAuthPayload) -> list[BitrixUserRead]:
 
 
 def convert_detected_to_settings(detected) -> BitrixMetricSettings:
-
     return BitrixMetricSettings(
         meeting_entity_type_id=detected.meeting_entity_type_id,
         contract_entity_type_id=detected.contract_entity_type_id,
@@ -60,6 +59,65 @@ def convert_detected_to_settings(detected) -> BitrixMetricSettings:
         contract_signed_stage_id=detected.contract_signed_stage_id,
         invoice_sent_stage_id=detected.invoice_sent_stage_id,
         invoice_paid_stage_id=detected.invoice_paid_stage_id,
+    )
+
+
+def complete_metric_settings(
+    metric_settings: BitrixMetricSettings | None,
+    client: BitrixRestClient,
+) -> BitrixMetricSettings:
+    detected_settings: BitrixMetricSettings | None = None
+
+    def detected() -> BitrixMetricSettings:
+        nonlocal detected_settings
+        if detected_settings is None:
+            detected_settings = convert_detected_to_settings(detect_metric_sources(client))
+        return detected_settings
+
+    if metric_settings is None:
+        return detected()
+
+    fallback = detected() if is_metric_settings_incomplete(metric_settings) else metric_settings
+    return BitrixMetricSettings(
+        meeting_entity_type_id=metric_settings.meeting_entity_type_id
+        or fallback.meeting_entity_type_id,
+        contract_entity_type_id=metric_settings.contract_entity_type_id
+        or fallback.contract_entity_type_id,
+        invoice_entity_type_id=metric_settings.invoice_entity_type_id
+        or fallback.invoice_entity_type_id,
+        cold_base_deal_category_id=metric_settings.cold_base_deal_category_id
+        if metric_settings.cold_base_deal_category_id is not None
+        else fallback.cold_base_deal_category_id,
+        sale_deal_category_id=metric_settings.sale_deal_category_id
+        if metric_settings.sale_deal_category_id is not None
+        else fallback.sale_deal_category_id,
+        sale_success_stage_id=metric_settings.sale_success_stage_id
+        or fallback.sale_success_stage_id,
+        meeting_held_stage_ids=metric_settings.meeting_held_stage_ids
+        or fallback.meeting_held_stage_ids,
+        contract_sent_stage_id=metric_settings.contract_sent_stage_id
+        or fallback.contract_sent_stage_id,
+        contract_signed_stage_id=metric_settings.contract_signed_stage_id
+        or fallback.contract_signed_stage_id,
+        invoice_sent_stage_id=metric_settings.invoice_sent_stage_id
+        or fallback.invoice_sent_stage_id,
+        invoice_paid_stage_id=metric_settings.invoice_paid_stage_id
+        or fallback.invoice_paid_stage_id,
+    )
+
+
+def is_metric_settings_incomplete(metric_settings: BitrixMetricSettings) -> bool:
+    return (
+        metric_settings.meeting_entity_type_id is None
+        or metric_settings.contract_entity_type_id is None
+        or metric_settings.cold_base_deal_category_id is None
+        or metric_settings.sale_deal_category_id is None
+        or metric_settings.sale_success_stage_id is None
+        or not metric_settings.meeting_held_stage_ids
+        or metric_settings.contract_sent_stage_id is None
+        or metric_settings.contract_signed_stage_id is None
+        or metric_settings.invoice_sent_stage_id is None
+        or metric_settings.invoice_paid_stage_id is None
     )
 
 
@@ -98,9 +156,7 @@ def build_system_report(
 
     client = build_client(auth)
     
-    if metric_settings is None:
-        detected = detect_metric_sources(client)
-        metric_settings = convert_detected_to_settings(detected)
+    metric_settings = complete_metric_settings(metric_settings, client)
 
     if not bitrix_user_ids:
         return BitrixSystemReportRead(
@@ -182,9 +238,7 @@ def get_metric_detail(
     """Возвращает детализацию для указанной метрики."""
     client = build_client(auth)
 
-    if metric_settings is None:
-        detected = detect_metric_sources(client)
-        metric_settings = convert_detected_to_settings(detected)
+    metric_settings = complete_metric_settings(metric_settings, client)
 
     # Находим название метрики
     metric_title = metric_code

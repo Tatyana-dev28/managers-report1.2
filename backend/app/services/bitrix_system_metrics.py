@@ -298,21 +298,46 @@ def get_stage_owner_ids_for_user(
         )
         return owner_ids
 
-    logger.info(f"=== GET_ITEMS: entityTypeId={entity_type_id}, owner_ids={owner_ids}, bitrix_user_id={bitrix_user_id}, category_id={category_id} ===")
-    assigned_rows = get_items_by_ids(
+    logger.info(
+        f"=== GET_USER_ITEM_IDS: entityTypeId={entity_type_id}, "
+        f"history_owner_ids={owner_ids}, bitrix_user_id={bitrix_user_id}, category_id={category_id} ==="
+    )
+    user_item_ids = get_current_item_ids_for_user(
         client=client,
         entity_type_id=entity_type_id,
-        owner_ids=owner_ids,
         bitrix_user_id=bitrix_user_id,
         category_id=category_id,
     )
-    result = {
-        owner_id
-        for owner_id in (as_int(row.get("id")) for row in assigned_rows)
-        if owner_id is not None
-    }
-    logger.info(f"=== GET_ITEMS RESULT: {result} (found {len(assigned_rows)} rows) ===")
+    result = owner_ids & user_item_ids
+    logger.info(f"=== USER STAGE IDS RESULT: {result} (found {len(result)} rows) ===")
     return result
+
+
+def get_current_item_ids_for_user(
+    client: BitrixRestClient,
+    entity_type_id: int,
+    bitrix_user_id: int,
+    category_id: int | None = None,
+) -> set[int]:
+    item_filter: dict[str, Any] = {
+        "assignedById": bitrix_user_id,
+    }
+    if category_id is not None:
+        item_filter["categoryId"] = category_id
+
+    rows = client.list_all(
+        "crm.item.list",
+        {
+            "entityTypeId": entity_type_id,
+            "select": ["id", "assignedById", "categoryId"],
+            "filter": item_filter,
+        },
+    )
+    return {
+        item_id
+        for item_id in (as_int(row.get("id")) for row in rows)
+        if item_id is not None
+    }
 
 
 def get_items_by_ids(

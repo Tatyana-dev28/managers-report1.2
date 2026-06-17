@@ -553,17 +553,39 @@ def _get_stage_owner_ids(
     if skip_assigned_filter:
         return owner_ids
 
-    assigned_rows = _get_items_by_ids(
+    user_item_ids = _get_current_item_ids_for_user(
         client=client,
         entity_type_id=entity_type_id,
-        owner_ids=owner_ids,
         bitrix_user_id=bitrix_user_id,
         category_id=category_id,
     )
+    return owner_ids & user_item_ids
+
+
+def _get_current_item_ids_for_user(
+    client: BitrixRestClient,
+    entity_type_id: int,
+    bitrix_user_id: int,
+    category_id: int | None = None,
+) -> set[int]:
+    item_filter: dict[str, Any] = {
+        "assignedById": bitrix_user_id,
+    }
+    if category_id is not None:
+        item_filter["categoryId"] = category_id
+
+    rows = client.list_all(
+        "crm.item.list",
+        {
+            "entityTypeId": entity_type_id,
+            "select": ["id", "assignedById", "categoryId"],
+            "filter": item_filter,
+        },
+    )
     return {
-        owner_id
-        for owner_id in (_as_int(row.get("id")) for row in assigned_rows)
-        if owner_id is not None
+        item_id
+        for item_id in (_as_int(row.get("id")) for row in rows)
+        if item_id is not None
     }
 
 

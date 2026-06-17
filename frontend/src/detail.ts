@@ -1,7 +1,7 @@
 import './style.css';
 import type { BitrixAuthPayload } from './types';
 import { getBitrixAuth } from './bitrix';
-import { getMetricDetail } from './api';
+import { getMetricDetail, getSavedMetricSettings } from './api';
 import type { MetricDetailResponse } from './api';
 import { getMetricDetailConfig, hasMetricDetail } from './detail-config';
 /**
@@ -30,10 +30,10 @@ function closeDetail() {
 
 function escapeHtml(value: string): string {
   return value
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
 
@@ -141,13 +141,14 @@ async function loadDetailData(
   auth: BitrixAuthPayload,
   params: DetailParams,
 ): Promise<MetricDetailResponse> {
+  const settings = await getSavedMetricSettings(auth);
   return getMetricDetail({
     auth,
     metric_code: params.metric,
     employee_id: parseInt(params.employee_id, 10),
     date_from: params.date_from,
     date_to: params.date_to,
-    settings: null,
+    settings,
   });
 }
 
