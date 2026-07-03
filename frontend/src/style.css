@@ -439,6 +439,23 @@ select:focus {
   background: var(--blue-dark);
 }
 
+.button.secondary {
+  border-color: var(--line);
+  background: #fff;
+  color: #36414d;
+}
+
+.button.secondary:hover:not(:disabled) {
+  border-color: var(--blue);
+  background: #f8fbff;
+  color: #2c3137;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .employee-filter-actions {
   display: flex;
   justify-content: space-between;

@@ -219,11 +219,16 @@ function renderStatusBar() {
 }
 
 function renderToolbar() {
+  const canDownloadReport = Boolean(state.report?.employees.length);
+
   return `
     <section class="toolbar">
       ${renderDateFilter()}
       ${renderEmployeeFilter()}
       <button id="load-report" class="button primary" type="button">Показать отчет</button>
+      <button id="download-excel" class="button secondary" type="button" ${canDownloadReport ? '' : 'disabled'}>
+        Скачать Excel
+      </button>
     </section>
   `;
 }
@@ -674,6 +679,10 @@ function bindEvents() {
     void loadReport();
   });
 
+  document.querySelector<HTMLButtonElement>('#download-excel')?.addEventListener('click', () => {
+    downloadReportExcel();
+  });
+
   document.querySelectorAll<HTMLButtonElement>('.employee-header').forEach((button) => {
     button.addEventListener('click', () => {
       const userId = Number(button.dataset.user);
@@ -737,6 +746,67 @@ async function loadReport() {
   stopReportTimer();
   state.reportLoading = false;
   render();
+}
+
+function downloadReportExcel() {
+  if (!state.report) return;
+
+  const period = `${isoToDisplayDate(state.report.date_from)} - ${isoToDisplayDate(state.report.date_to)}`;
+  const rows = state.report.employees.flatMap((employee) =>
+    employee.metrics.map((metric) => `
+      <tr>
+        <td>${escapeHtml(employee.full_name)}</td>
+        <td>${escapeHtml(metric.metric_title)}</td>
+        <td>${escapeHtml(formatExcelValue(metric.system_value, metric.is_money))}</td>
+      </tr>
+    `),
+  );
+
+  const workbookHtml = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          table { border-collapse: collapse; }
+          th, td { border: 1px solid #d6dee6; padding: 6px 10px; }
+          th { background: #f6f8fa; font-weight: 700; }
+          .title { font-weight: 700; font-size: 16px; }
+          .period-label { font-weight: 700; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <tr>
+            <td class="title" colspan="3">Ежедневный отчет менеджера</td>
+          </tr>
+          <tr>
+            <td class="period-label">Выбранный период</td>
+            <td colspan="2">${escapeHtml(period)}</td>
+          </tr>
+          <tr><td colspan="3"></td></tr>
+          <tr>
+            <th>Менеджер</th>
+            <th>Показатель</th>
+            <th>Данные системы</th>
+          </tr>
+          ${rows.join('')}
+        </table>
+      </body>
+    </html>
+  `;
+
+  const blob = new Blob([workbookHtml], {
+    type: 'application/vnd.ms-excel;charset=utf-8',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `manager-report-${state.report.date_from}-${state.report.date_to}.xls`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function startReportTimer() {
@@ -926,6 +996,13 @@ function formatValue(value: string, isMoney: boolean) {
     minimumFractionDigits: isMoney ? 2 : 0,
     maximumFractionDigits: isMoney ? 2 : 0,
   }).format(Number.isNaN(numberValue) ? 0 : numberValue);
+}
+
+function formatExcelValue(value: string, isMoney: boolean) {
+  const numberValue = Number(value);
+  if (Number.isNaN(numberValue)) return value;
+
+  return isMoney ? numberValue.toFixed(2) : String(numberValue);
 }
 
 function escapeHtml(value: string) {
