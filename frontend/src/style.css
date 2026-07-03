@@ -441,8 +441,8 @@ select:focus {
 
 .button.secondary {
   border-color: var(--line);
-  background: #fff;
-  color: #36414d;
+  background: #70b24f;
+  color: #000000;
 }
 
 .button.secondary:hover:not(:disabled) {
