@@ -752,62 +752,245 @@ function downloadReportExcel() {
   if (!state.report) return;
 
   const period = `${isoToDisplayDate(state.report.date_from)} - ${isoToDisplayDate(state.report.date_to)}`;
-  const rows = state.report.employees.flatMap((employee) =>
-    employee.metrics.map((metric) => `
-      <tr>
-        <td>${escapeHtml(employee.full_name)}</td>
-        <td>${escapeHtml(metric.metric_title)}</td>
-        <td>${escapeHtml(formatExcelValue(metric.system_value, metric.is_money))}</td>
-      </tr>
-    `),
-  );
+  const rows: ExcelCell[][] = [
+    [{ value: 'Ежедневный отчет менеджера', type: 'text' }],
+    [
+      { value: 'Выбранный период', type: 'text' },
+      { value: period, type: 'text' },
+    ],
+    [],
+    [
+      { value: 'Менеджер', type: 'text' },
+      { value: 'Показатель', type: 'text' },
+      { value: 'Данные системы', type: 'text' },
+    ],
+    ...state.report.employees.flatMap((employee) =>
+      employee.metrics.map<ExcelCell[]>((metric) => [
+        { value: employee.full_name, type: 'text' },
+        { value: metric.metric_title, type: 'text' },
+        { value: formatExcelValue(metric.system_value, metric.is_money), type: 'number' },
+      ]),
+    ),
+  ];
 
-  const workbookHtml = `
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <style>
-          table { border-collapse: collapse; }
-          th, td { border: 1px solid #d6dee6; padding: 6px 10px; }
-          th { background: #f6f8fa; font-weight: 700; }
-          .title { font-weight: 700; font-size: 16px; }
-          .period-label { font-weight: 700; }
-        </style>
-      </head>
-      <body>
-        <table>
-          <tr>
-            <td class="title" colspan="3">Ежедневный отчет менеджера</td>
-          </tr>
-          <tr>
-            <td class="period-label">Выбранный период</td>
-            <td colspan="2">${escapeHtml(period)}</td>
-          </tr>
-          <tr><td colspan="3"></td></tr>
-          <tr>
-            <th>Менеджер</th>
-            <th>Показатель</th>
-            <th>Данные системы</th>
-          </tr>
-          ${rows.join('')}
-        </table>
-      </body>
-    </html>
-  `;
-
-  const blob = new Blob([workbookHtml], {
-    type: 'application/vnd.ms-excel;charset=utf-8',
-  });
+  const blob = createXlsxBlob(rows);
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `manager-report-${state.report.date_from}-${state.report.date_to}.xls`;
+  link.download = `manager-report-${state.report.date_from}-${state.report.date_to}.xlsx`;
   document.body.append(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
 }
+
+type ExcelCell = {
+  value: string;
+  type: 'text' | 'number';
+};
+
+function createXlsxBlob(rows: ExcelCell[][]) {
+  const files: Record<string, string> = {
+    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>`,
+    '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`,
+    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Отчет" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>`,
+    'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>`,
+    'xl/worksheets/sheet1.xml': createWorksheetXml(rows),
+  };
+
+  return createZipBlob(files, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+
+function createWorksheetXml(rows: ExcelCell[][]) {
+  const sheetRows = rows.map((row, rowIndex) => {
+    const rowNumber = rowIndex + 1;
+    const cells = row
+      .map((cell, columnIndex) => createCellXml(cell, `${columnName(columnIndex + 1)}${rowNumber}`))
+      .join('');
+
+    return `<row r="${rowNumber}">${cells}</row>`;
+  }).join('');
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <dimension ref="A1:C${Math.max(rows.length, 1)}"/>
+  <cols>
+    <col min="1" max="1" width="28" customWidth="1"/>
+    <col min="2" max="2" width="56" customWidth="1"/>
+    <col min="3" max="3" width="18" customWidth="1"/>
+  </cols>
+  <sheetData>${sheetRows}</sheetData>
+  <mergeCells count="1"><mergeCell ref="A1:C1"/></mergeCells>
+</worksheet>`;
+}
+
+function createCellXml(cell: ExcelCell, reference: string) {
+  const numberValue = Number(cell.value);
+  if (cell.type === 'number' && Number.isFinite(numberValue)) {
+    return `<c r="${reference}"><v>${numberValue}</v></c>`;
+  }
+
+  return `<c r="${reference}" t="inlineStr"><is><t>${escapeXml(cell.value)}</t></is></c>`;
+}
+
+function columnName(columnNumber: number) {
+  let name = '';
+  let current = columnNumber;
+
+  while (current > 0) {
+    const remainder = (current - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    current = Math.floor((current - 1) / 26);
+  }
+
+  return name;
+}
+
+function createZipBlob(files: Record<string, string>, type: string) {
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  const centralDirectory: Uint8Array[] = [];
+  let offset = 0;
+
+  Object.entries(files).forEach(([name, content]) => {
+    const nameBytes = encoder.encode(name);
+    const data = encoder.encode(content);
+    const crc = crc32(data);
+    const localHeader = createZipLocalHeader(nameBytes, data, crc);
+    const centralHeader = createZipCentralHeader(nameBytes, data, crc, offset);
+
+    chunks.push(localHeader, nameBytes, data);
+    centralDirectory.push(centralHeader, nameBytes);
+    offset += localHeader.length + nameBytes.length + data.length;
+  });
+
+  const centralDirectoryOffset = offset;
+  const centralDirectorySize = centralDirectory.reduce((sum, chunk) => sum + chunk.length, 0);
+  const endRecord = createZipEndRecord(Object.keys(files).length, centralDirectorySize, centralDirectoryOffset);
+
+  const zipBytes = concatUint8Arrays([...chunks, ...centralDirectory, endRecord]);
+  return new Blob([zipBytes.buffer as ArrayBuffer], { type });
+}
+
+function concatUint8Arrays(chunks: Uint8Array[]) {
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+
+  chunks.forEach((chunk) => {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  });
+
+  return result;
+}
+
+function createZipLocalHeader(nameBytes: Uint8Array, data: Uint8Array, crc: number) {
+  const header = new Uint8Array(30);
+  const view = new DataView(header.buffer);
+  const { time, date } = getZipDateTime();
+
+  view.setUint32(0, 0x04034b50, true);
+  view.setUint16(4, 20, true);
+  view.setUint16(6, 0x0800, true);
+  view.setUint16(8, 0, true);
+  view.setUint16(10, time, true);
+  view.setUint16(12, date, true);
+  view.setUint32(14, crc, true);
+  view.setUint32(18, data.length, true);
+  view.setUint32(22, data.length, true);
+  view.setUint16(26, nameBytes.length, true);
+  view.setUint16(28, 0, true);
+
+  return header;
+}
+
+function createZipCentralHeader(nameBytes: Uint8Array, data: Uint8Array, crc: number, offset: number) {
+  const header = new Uint8Array(46);
+  const view = new DataView(header.buffer);
+  const { time, date } = getZipDateTime();
+
+  view.setUint32(0, 0x02014b50, true);
+  view.setUint16(4, 20, true);
+  view.setUint16(6, 20, true);
+  view.setUint16(8, 0x0800, true);
+  view.setUint16(10, 0, true);
+  view.setUint16(12, time, true);
+  view.setUint16(14, date, true);
+  view.setUint32(16, crc, true);
+  view.setUint32(20, data.length, true);
+  view.setUint32(24, data.length, true);
+  view.setUint16(28, nameBytes.length, true);
+  view.setUint16(30, 0, true);
+  view.setUint16(32, 0, true);
+  view.setUint16(34, 0, true);
+  view.setUint16(36, 0, true);
+  view.setUint32(38, 0, true);
+  view.setUint32(42, offset, true);
+
+  return header;
+}
+
+function createZipEndRecord(fileCount: number, centralDirectorySize: number, centralDirectoryOffset: number) {
+  const record = new Uint8Array(22);
+  const view = new DataView(record.buffer);
+
+  view.setUint32(0, 0x06054b50, true);
+  view.setUint16(4, 0, true);
+  view.setUint16(6, 0, true);
+  view.setUint16(8, fileCount, true);
+  view.setUint16(10, fileCount, true);
+  view.setUint32(12, centralDirectorySize, true);
+  view.setUint32(16, centralDirectoryOffset, true);
+  view.setUint16(20, 0, true);
+
+  return record;
+}
+
+function getZipDateTime() {
+  const now = new Date();
+  const time = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2);
+  const date = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+
+  return { time, date };
+}
+
+function crc32(data: Uint8Array) {
+  let crc = 0xffffffff;
+
+  for (const byte of data) {
+    crc = (crc >>> 8) ^ CRC32_TABLE[(crc ^ byte) & 0xff];
+  }
+
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+const CRC32_TABLE = Array.from({ length: 256 }, (_, index) => {
+  let value = index;
+
+  for (let bit = 0; bit < 8; bit += 1) {
+    value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  }
+
+  return value >>> 0;
+});
 
 function startReportTimer() {
   if (reportTimerId) {
@@ -1003,6 +1186,15 @@ function formatExcelValue(value: string, isMoney: boolean) {
   if (Number.isNaN(numberValue)) return value;
 
   return isMoney ? numberValue.toFixed(2) : String(numberValue);
+}
+
+function escapeXml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
 }
 
 function escapeHtml(value: string) {
