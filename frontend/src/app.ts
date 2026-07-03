@@ -83,6 +83,8 @@ type AppState = {
   report: SystemReport | null;
   loading: boolean;
   reportLoading: boolean;
+  reportStartedAt: number | null;
+  reportElapsedSeconds: number;
   error: string | null;
   statusMessage: string;
   metricSettings: MetricSettings | null;
@@ -120,12 +122,16 @@ const state: AppState = {
   report: null,
   loading: false,
   reportLoading: false,
+  reportStartedAt: null,
+  reportElapsedSeconds: 0,
   error: null,
   statusMessage: 'Инициализация приложения...',
   metricSettings: null,
   employeeSearch: '',
   employeeFilterOpen: false,
 };
+
+let reportTimerId: ReturnType<typeof window.setInterval> | null = null;
 
 export async function startApp() {
   if (!app) return;
@@ -197,9 +203,17 @@ function render() {
 }
 
 function renderStatusBar() {
+  const showTimer = state.reportLoading || state.reportElapsedSeconds > 0;
+
   return `
     <div class="status-strip ${state.loading || state.reportLoading ? 'active' : ''}">
-      ${escapeHtml(state.statusMessage)}
+      <span class="status-message">${escapeHtml(state.statusMessage)}</span>
+      ${showTimer ? `
+        <span class="status-timer" aria-label="Время формирования отчета">
+          <span class="status-timer-label">Время:</span>
+          <span class="status-timer-value">${formatElapsedTime(state.reportElapsedSeconds)}</span>
+        </span>
+      ` : ''}
     </div>
   `;
 }
@@ -396,8 +410,14 @@ function renderEmployeeReport(employee: EmployeeSystemReport) {
 
   return `
     <section class="employee-report">
-      <button class="employee-header ${isOpen ? 'active' : ''}" type="button" data-user="${employee.bitrix_user_id}">
-        <span>${escapeHtml(employee.full_name)}</span>
+      <button
+        class="employee-header ${isOpen ? 'active' : ''}"
+        type="button"
+        data-user="${employee.bitrix_user_id}"
+        aria-expanded="${isOpen}"
+      >
+        <span class="employee-name">${escapeHtml(employee.full_name)}</span>
+        <span class="employee-toggle-icon" aria-hidden="true"></span>
       </button>
       ${isOpen ? renderEmployeeMetrics(employee) : ''}
     </section>
@@ -697,6 +717,7 @@ async function loadReport() {
   }
 
   state.reportLoading = true;
+  startReportTimer();
   state.statusMessage = 'Собираем системные показатели из Битрикс24...';
   render();
 
@@ -713,8 +734,40 @@ async function loadReport() {
   if (state.error) {
     state.statusMessage = 'Не удалось загрузить системные показатели. Проверьте подключение и попробуйте снова.';
   }
+  stopReportTimer();
   state.reportLoading = false;
   render();
+}
+
+function startReportTimer() {
+  if (reportTimerId) {
+    window.clearInterval(reportTimerId);
+  }
+
+  state.reportStartedAt = Date.now();
+  state.reportElapsedSeconds = 0;
+  reportTimerId = window.setInterval(updateReportTimer, 1000);
+}
+
+function updateReportTimer() {
+  if (!state.reportStartedAt) return;
+
+  state.reportElapsedSeconds = Math.floor((Date.now() - state.reportStartedAt) / 1000);
+  const timerValue = document.querySelector<HTMLElement>('.status-timer-value');
+  if (timerValue) {
+    timerValue.textContent = formatElapsedTime(state.reportElapsedSeconds);
+  }
+}
+
+function stopReportTimer() {
+  updateReportTimer();
+
+  if (reportTimerId) {
+    window.clearInterval(reportTimerId);
+    reportTimerId = null;
+  }
+
+  state.reportStartedAt = null;
 }
 
 function handleOutsideClick(event: MouseEvent) {
@@ -844,6 +897,16 @@ function isoToDisplayDate(value: string) {
   const [year, month, day] = value.split('-');
   if (!year || !month || !day) return value;
   return `${day}.${month}.${year}`;
+}
+
+function formatElapsedTime(totalSeconds: number) {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return [hours, minutes, seconds]
+    .map((part) => String(part).padStart(2, '0'))
+    .join(':');
 }
 
 function displayToIsoDate(value: string) {
